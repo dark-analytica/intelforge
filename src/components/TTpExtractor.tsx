@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronDown, ChevronUp, Brain, Copy, ExternalLink, Sparkles, Clock, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,6 +55,7 @@ export const TTpExtractor = ({ text, onTTpApply }: TTpExtractorProps) => {
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [selectedModel, setSelectedModel] = useState('gpt-5-2025-08-07');
   const { toast } = useToast();
 
   const extractTTps = async () => {
@@ -75,7 +77,7 @@ export const TTpExtractor = ({ text, onTTpApply }: TTpExtractorProps) => {
       const { data, error: functionError } = await supabase.functions.invoke('extract-ttps', {
         body: { 
           text,
-          model: 'gpt-5-mini-2025-08-07'
+          model: selectedModel
         }
       });
 
@@ -167,14 +169,27 @@ export const TTpExtractor = ({ text, onTTpApply }: TTpExtractorProps) => {
             </CardDescription>
           </div>
           
-          <Button 
-            onClick={extractTTps}
-            disabled={isExtracting}
-            className="gap-2"
-          >
-            <Sparkles className="h-4 w-4" />
-            {isExtracting ? 'Analyzing...' : 'Extract TTPs'}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gpt-5-2025-08-07">GPT-5 (Flagship)</SelectItem>
+                <SelectItem value="gpt-5-mini-2025-08-07">GPT-5 Mini (Fast)</SelectItem>
+                <SelectItem value="gpt-4o-mini">GPT-4o Mini (Legacy)</SelectItem>
+                <SelectItem value="gpt-4o">GPT-4o (Legacy)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={extractTTps}
+              disabled={isExtracting}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {isExtracting ? 'Analyzing...' : 'Extract TTPs'}
+            </Button>
+          </div>
         </div>
         
         {isExtracting && (

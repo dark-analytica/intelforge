@@ -37,6 +37,10 @@ const legitWebsitePatterns = [
   /\b(google|microsoft|apple|amazon|cloudflare)\.com\b/i,
   /\b(stackoverflow|wikipedia|w3\.org|mozilla\.org)\.com?\b/i,
   
+  // Threat intel blogs and legitimate security content
+  /\baka\.ms\b/i,
+  /\bthecyberwire\.com\b/i,
+  
   // CDNs and common services  
   /\b(unpkg|jsdelivr|cdnjs|googleapis|bootstrapcdn|jquery)\.com?\b/i,
   /\b(gravatar|disqus|addthis|shareaholic)\.com\b/i,
