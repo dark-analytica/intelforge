@@ -205,8 +205,12 @@ const getTacticCorrelationHunt = (ttp: any, allTtps: any[]): HuntIdea | null => 
   
   if (sameTacticTtps.length === 0) return null;
 
+  // Create unique ID using tactic and technique combination to avoid duplicates
+  const tacticSlug = ttp.tactic.toLowerCase().replace(/\s+/g, '-');
+  const techniqueSlug = ttp.technique_id.replace('.', '-');
+
   return {
-    id: `tactic-correlation-${ttp.tactic.toLowerCase().replace(/\s+/g, '-')}`,
+    id: `tactic-correlation-${tacticSlug}-${techniqueSlug}`,
     title: `${ttp.tactic} Tactic Correlation`,
     description: `Correlate multiple techniques within ${ttp.tactic} tactic for campaign analysis`,
     techniques: [ttp.technique_id, ...sameTacticTtps.map(t => t.technique_id)],

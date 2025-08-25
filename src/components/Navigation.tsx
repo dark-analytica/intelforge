@@ -5,6 +5,7 @@ import {
   Search, 
   Code, 
   Target, 
+  Package,
   Download, 
   Settings,
   ChevronRight,
@@ -23,6 +24,7 @@ const navigationItems = [
   { id: 'ingest', label: 'IOCs', icon: Search, badge: 'iocCount' },
   { id: 'queries', label: 'Queries', icon: Code, badge: 'queryCount' },
   { id: 'hunts', label: 'Hunts', icon: Target },
+  { id: 'hunt-packs', label: 'Hunt Packs', icon: Package },
   { id: 'cql-builder', label: 'CQL Builder', icon: Activity },
   { id: 'exports', label: 'Exports', icon: Download },
   { id: 'settings', label: 'Settings', icon: Settings }

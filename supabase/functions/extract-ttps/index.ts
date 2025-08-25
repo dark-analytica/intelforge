@@ -192,20 +192,67 @@ Focus on accuracy over quantity. Only include TTPs with strong evidence.`;
 
     const data = await response.json();
     console.log('OpenAI response received, parsing...');
-
-    let extractedData;
-    try {
-      extractedData = JSON.parse(data.choices[0].message.content);
-    } catch (parseError) {
-      console.error('Failed to parse OpenAI JSON response:', parseError);
-      console.error('Raw content:', data.choices[0].message.content);
+    
+    // Check if we have a valid response structure
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error('Invalid OpenAI response structure:', JSON.stringify(data, null, 2));
       return new Response(JSON.stringify({ 
-        error: 'Invalid JSON response from AI model',
-        details: data.choices[0].message.content 
+        error: 'Invalid response structure from AI model',
+        details: 'No choices or message content found'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    const rawContent = data.choices[0].message.content;
+    
+    // Check if content is empty or null
+    if (!rawContent || rawContent.trim() === '') {
+      console.error('Empty content received from OpenAI');
+      return new Response(JSON.stringify({ 
+        error: 'Empty response from AI model',
+        details: 'The AI model returned no content'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    let extractedData;
+    try {
+      // Clean up the content in case there are markdown code blocks
+      const cleanContent = rawContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      extractedData = JSON.parse(cleanContent);
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI JSON response:', parseError);
+      console.error('Raw content:', rawContent);
+      
+      // Attempt to extract JSON from markdown if present
+      const jsonMatch = rawContent.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        try {
+          extractedData = JSON.parse(jsonMatch[1]);
+          console.log('Successfully extracted JSON from markdown block');
+        } catch (markdownParseError) {
+          console.error('Failed to parse JSON from markdown block:', markdownParseError);
+          return new Response(JSON.stringify({ 
+            error: 'Invalid JSON response from AI model',
+            details: rawContent
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } else {
+        return new Response(JSON.stringify({ 
+          error: 'Invalid JSON response from AI model',
+          details: rawContent
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const processingTime = Date.now() - startTime;

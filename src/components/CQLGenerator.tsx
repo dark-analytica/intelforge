@@ -36,38 +36,70 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
   const { toast } = useToast();
 
   const generateQueries = () => {
-    if (!selectedTemplateId || !selectedVendor || !selectedModule) return;
+    console.log('Generate Queries clicked:', { selectedTemplateId, selectedVendor, selectedModule });
+    
+    if (!selectedTemplateId || !selectedVendor || !selectedModule) {
+      console.log('Missing required selections');
+      toast({
+        title: "Missing Selection",
+        description: "Please select a template, vendor, and module.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     const template = cqlTemplates.find(t => t.id === selectedTemplateId);
-    if (!template) return;
+    if (!template) {
+      console.log('Template not found:', selectedTemplateId);
+      toast({
+        title: "Template Not Found",
+        description: "Selected template could not be found.",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    // Use vendor-aware rendering
-    const { query: cql, profile, warnings } = renderTemplateWithVendor(
-      template, 
-      iocs, 
-      selectedVendor, 
-      selectedModule
-    );
-    
-    const validation = validateCQLSyntax(cql);
+    console.log('Generating query with template:', template.name);
 
-    const newQuery: GeneratedQuery = {
-      template: template.name,
-      cql,
-      validation,
-      vendor: selectedVendor,
-      module: selectedModule,
-      warnings,
-      timestamp: new Date()
-    };
+    try {
+      // Use vendor-aware rendering
+      const { query: cql, profile, warnings } = renderTemplateWithVendor(
+        template, 
+        iocs, 
+        selectedVendor, 
+        selectedModule
+      );
+      
+      console.log('Generated CQL:', cql);
+      
+      const validation = validateCQLSyntax(cql);
+      console.log('Validation result:', validation);
 
-    setGeneratedQueries(prev => [newQuery, ...prev.slice(0, 9)]); // Keep last 10 queries
-    onQueriesGenerated?.([cql, ...generatedQueries.map(q => q.cql)]);
-    
-    toast({
-      title: "Query Generated",
-      description: `${template.name} generated for ${profile.name}`
-    });
+      const newQuery: GeneratedQuery = {
+        template: template.name,
+        cql,
+        validation,
+        vendor: selectedVendor,
+        module: selectedModule,
+        warnings,
+        timestamp: new Date()
+      };
+
+      setGeneratedQueries(prev => [newQuery, ...prev.slice(0, 9)]); // Keep last 10 queries
+      onQueriesGenerated?.([cql, ...generatedQueries.map(q => q.cql)]);
+      
+      toast({
+        title: "Query Generated",
+        description: `${template.name} generated for ${profile.name}`
+      });
+    } catch (error) {
+      console.error('Error generating query:', error);
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive"
+      });
+    }
   };
 
   const copyToClipboard = (cql: string) => {
