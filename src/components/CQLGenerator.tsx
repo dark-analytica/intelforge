@@ -11,9 +11,10 @@ import Editor from '@monaco-editor/react';
 
 interface CQLGeneratorProps {
   iocs: IOCSet;
+  onQueriesGenerated?: (queries: string[]) => void;
 }
 
-export const CQLGenerator = ({ iocs }: CQLGeneratorProps) => {
+export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [generatedQueries, setGeneratedQueries] = useState<Array<{ template: string; cql: string; validation: any }>>([]);
   const { toast } = useToast();
@@ -34,6 +35,7 @@ export const CQLGenerator = ({ iocs }: CQLGeneratorProps) => {
     };
 
     setGeneratedQueries(prev => [newQuery, ...prev.slice(0, 4)]); // Keep last 5 queries
+    onQueriesGenerated?.([cql, ...generatedQueries.map(q => q.cql)]);
   };
 
   const copyToClipboard = (cql: string) => {

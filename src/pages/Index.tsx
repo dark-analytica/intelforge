@@ -4,6 +4,8 @@ import { IOCExtractor } from '@/components/IOCExtractor';
 import { CQLGenerator } from '@/components/CQLGenerator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import ApiKeysDialog from '@/components/ApiKeysDialog';
+import { ExportDialog } from '@/components/ExportDialog';
+import { HuntSuggestions } from '@/components/HuntSuggestions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,33 +24,24 @@ const Index = () => {
     emails: []
   });
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [generatedQueries, setGeneratedQueries] = useState<string[]>([]);
 
   const counts = getIOCCounts(iocs);
+
+  const handleApplyHunt = (template: string, huntId: string) => {
+    setGeneratedQueries(prev => [...prev, template]);
+    setActiveSection('queries');
+  };
 
   const renderContent = () => {
     switch (activeSection) {
       case 'ingest':
         return <IOCExtractor iocs={iocs} onIOCsExtracted={setIOCs} />;
       case 'queries':
-        return <CQLGenerator iocs={iocs} />;
+        return <CQLGenerator iocs={iocs} onQueriesGenerated={setGeneratedQueries} />;
       case 'hunts':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-terminal text-glow">ATT&CK Hunt Ideas</CardTitle>
-              <CardDescription>
-                AI-generated hunt suggestions mapped to MITRE ATT&CK techniques
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Hunt suggestions will appear here after IOC extraction</p>
-                <p className="text-sm mt-2">Requires LLM configuration in Settings</p>
-              </div>
-            </CardContent>
-          </Card>
-        );
+        return <HuntSuggestions iocs={iocs} onApplyHunt={handleApplyHunt} />;
       case 'exports':
         return (
           <Card>
@@ -60,26 +53,52 @@ const Index = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <Button variant="outline" disabled className="gap-2">
+                <Button 
+                  variant="outline" 
+                  className="gap-2"
+                  onClick={() => setExportDialogOpen(true)}
+                  disabled={counts.total === 0}
+                >
                   <Zap className="h-4 w-4" />
                   Export CQL
                 </Button>
-                <Button variant="outline" disabled className="gap-2">
+                <Button 
+                  variant="outline" 
+                  className="gap-2"
+                  onClick={() => setExportDialogOpen(true)}
+                  disabled={counts.total === 0}
+                >
                   <Zap className="h-4 w-4" />
                   Export CSV
                 </Button>
-                <Button variant="outline" disabled className="gap-2">
+                <Button 
+                  variant="outline" 
+                  className="gap-2"
+                  onClick={() => setExportDialogOpen(true)}
+                  disabled={counts.total === 0}
+                >
                   <Zap className="h-4 w-4" />
                   Export STIX 2.1
                 </Button>
-                <Button variant="outline" disabled className="gap-2">
+                <Button 
+                  variant="outline" 
+                  className="gap-2"
+                  onClick={() => setExportDialogOpen(true)}
+                  disabled={counts.total === 0}
+                >
                   <Zap className="h-4 w-4" />
                   Export JSON
                 </Button>
               </div>
-              <div className="text-center text-muted-foreground text-sm">
-                Extract IOCs and generate queries to enable exports
-              </div>
+              {counts.total === 0 ? (
+                <div className="text-center text-muted-foreground text-sm">
+                  Extract IOCs first to enable exports
+                </div>
+              ) : (
+                <div className="text-center text-sm">
+                  <Badge variant="outline">{counts.total} IOCs ready for export</Badge>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
@@ -135,7 +154,7 @@ const Index = () => {
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         iocCount={counts.total}
-        queryCount={0}
+        queryCount={generatedQueries.length}
       />
 
       {/* Main Content */}
@@ -175,6 +194,12 @@ const Index = () => {
           </div>
         </main>
         <ApiKeysDialog open={apiDialogOpen} onOpenChange={setApiDialogOpen} />
+        <ExportDialog 
+          open={exportDialogOpen} 
+          onOpenChange={setExportDialogOpen}
+          iocs={iocs}
+          queries={generatedQueries}
+        />
       </div>
     </div>
   );
