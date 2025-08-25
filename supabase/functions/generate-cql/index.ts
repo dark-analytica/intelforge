@@ -10,6 +10,8 @@ interface CQLGenerationRequest {
   description: string;
   model?: string;
   context?: string;
+  vendor?: string;
+  module?: string;
 }
 
 serve(async (req) => {
@@ -36,7 +38,7 @@ serve(async (req) => {
 
   try {
     const body: CQLGenerationRequest = await req.json();
-    const { description, model = 'gpt-5-2025-08-07', context } = body;
+    const { description, model = 'gpt-5-2025-08-07', context, vendor, module } = body;
 
     if (!description?.trim()) {
       return new Response(JSON.stringify({ error: 'Description is required' }), {
@@ -45,7 +47,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Generating CQL query for: ${description} (model: ${model})`);
+    console.log(`Generating CQL query for: ${description} (model: ${model}, vendor: ${vendor || 'auto'}, module: ${module || 'auto'})`);
 
     const systemPrompt = `You are an expert in CrowdStrike Falcon LogScale (Humio) and CQL (Common Query Language). 
 
@@ -197,9 +199,15 @@ Build complete, executable queries that fulfill the entire user request with pro
 
 Generate ONLY the CQL query code without explanations or markdown formatting.`;
 
+    // Build vendor-specific context
+    let vendorContext = context || 'Standard CrowdStrike Falcon environment';
+    if (vendor && module) {
+      vendorContext += `\n\nVENDOR CONFIGURATION:\n- Platform: ${vendor}\n- Module: ${module}\n- Use vendor-specific field mappings and repository filters when applicable`;
+    }
+
     const userPrompt = `Analyze this request and build a comprehensive CQL query: ${description}
 
-Additional context: ${context || 'Standard CrowdStrike Falcon environment'}
+Additional context: ${vendorContext}
 
 Automatically determine what type of query is needed and build a complete solution. Return only the CQL query code.`;
 
@@ -215,14 +223,67 @@ Automatically determine what type of query is needed and build a complete soluti
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_completion_tokens: 1000,
+        // Use appropriate token parameter based on model
+        ...(model.startsWith('gpt-5') || model.startsWith('gpt-4.1') || model.startsWith('o3') || model.startsWith('o4') 
+          ? { max_completion_tokens: 1000 }
+          : { max_tokens: 1000 }
+        ),
+        // Only add temperature for legacy models
+        ...(model === 'gpt-4o' || model === 'gpt-4o-mini' || model === 'gpt-4' || model === 'gpt-3.5-turbo'
+          ? { temperature: 0.7 }
+          : {}
+        ),
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
       console.error(`OpenAI API error (${response.status}):`, errorData);
-      return new Response(JSON.stringify({ error: 'Failed to generate CQL query' }), {
+      
+      // Try fallback to gpt-4o-mini if the main model fails
+      if (model !== 'gpt-4o-mini') {
+        console.log('Retrying with fallback model: gpt-4o-mini');
+        try {
+          const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openAIApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              max_tokens: 1000,
+              temperature: 0.7,
+            }),
+          });
+          
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            const fallbackQuery = fallbackData.choices?.[0]?.message?.content?.trim() || '';
+            if (fallbackQuery) {
+              console.log('Fallback model succeeded');
+              return new Response(JSON.stringify({ 
+                query: fallbackQuery,
+                description,
+                model_used: 'gpt-4o-mini (fallback)'
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+          }
+        } catch (fallbackError) {
+          console.error('Fallback model also failed:', fallbackError);
+        }
+      }
+      
+      return new Response(JSON.stringify({ 
+        error: 'Failed to generate CQL query. Please try again with different wording.',
+        details: errorData
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -259,7 +320,9 @@ Automatically determine what type of query is needed and build a complete soluti
 
     return new Response(JSON.stringify({ 
       query: generatedQuery,
-      description 
+      description,
+      model_used: model,
+      vendor_context: vendor && module ? { vendor, module } : null
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

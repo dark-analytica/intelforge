@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { Bot, Copy, Sparkles, BookOpen, Code, Zap } from 'lucide-react';
+import { Bot, Copy, Sparkles, BookOpen, Code, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { vendors, getVendorById, getModuleById, validateFieldMapping } from '@/lib/vendors';
 
 interface CQLBuilderProps {}
 
@@ -18,31 +19,46 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
   const [query, setQuery] = useState('');
   const [userInput, setUserInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-5-2025-08-07');
+  const [selectedVendor, setSelectedVendor] = useState('');
+  const [selectedModule, setSelectedModule] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationResult, setValidationResult] = useState<{ valid: boolean; missing: string[]; warnings: string[]; } | null>(null);
   const { toast } = useToast();
 
   const modelOptions = [
     { value: 'gpt-5-2025-08-07', label: 'GPT-5 (2025-08-07)', description: 'Latest flagship model' },
-    { value: 'gpt-5', label: 'GPT-5', description: 'Flagship model' },
-    { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini (2025-08-07)', description: 'Latest efficient model' },
-    { value: 'gpt-5-mini', label: 'GPT-5 Mini', description: 'Efficient model' },
-    { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano (2025-08-07)', description: 'Latest fastest model' },
-    { value: 'gpt-5-nano', label: 'GPT-5 Nano', description: 'Fastest model' },
-    { value: 'gpt-4o', label: 'GPT-4o', description: 'Powerful legacy model' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast legacy model' },
-    { value: 'gpt-4', label: 'GPT-4', description: 'Legacy model' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', description: 'Budget model' }
+    { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini (2025-08-07)', description: 'Fast & efficient' },
+    { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano (2025-08-07)', description: 'Fastest model' },
+    { value: 'gpt-4.1-2025-04-14', label: 'GPT-4.1 (2025-04-14)', description: 'Reliable flagship' },
+    { value: 'o3-2025-04-16', label: 'O3 (2025-04-16)', description: 'Advanced reasoning' },
+    { value: 'o4-mini-2025-04-16', label: 'O4 Mini (2025-04-16)', description: 'Fast reasoning' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Legacy fast model' }
   ];
 
   const examplePrompts = [
-    "Find all PowerShell executions with encoded commands",
-    "Detect suspicious network connections to external IPs",
-    "Search for file creation events in system directories",
-    "Find authentication failures followed by successful logons",
-    "Detect process injection techniques",
+    "Find authentication events with medium to critical risk levels and display in map format",
+    "Search for PowerShell executions with encoded commands",
+    "Detect suspicious network connections to external IPs", 
+    "Find file creation events in system directories",
+    "Correlate authentication failures with successful logons",
     "Search for DNS queries to recently registered domains"
   ];
+
+  // Validation function
+  const validateQuery = (queryText: string) => {
+    if (!selectedVendor || !selectedModule || !queryText.trim()) {
+      setValidationResult(null);
+      return;
+    }
+
+    // Extract potential field references from query
+    const fieldMatches = queryText.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g) || [];
+    const uniqueFields = [...new Set(fieldMatches)];
+    
+    const result = validateFieldMapping(selectedVendor, selectedModule, uniqueFields);
+    setValidationResult(result);
+  };
 
   const generateCQLQuery = async () => {
     if (!userInput.trim()) {
@@ -62,7 +78,9 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
         body: {
           description: userInput,
           model: selectedModel,
-          context: "CrowdStrike Falcon LogScale (Humio) environment"
+          context: "CrowdStrike Falcon LogScale (Humio) environment",
+          vendor: selectedVendor || undefined,
+          module: selectedModule || undefined
         }
       });
 
@@ -72,9 +90,10 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
 
       if (data?.query) {
         setQuery(data.query);
+        validateQuery(data.query);
         toast({
           title: "Query Generated",
-          description: "CQL query has been generated successfully."
+          description: `CQL query generated using ${data.model_used || selectedModel}`
         });
       } else {
         throw new Error('No query received from the generator');
@@ -112,6 +131,9 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
     setUserInput(prompt);
   };
 
+  // Get available modules for selected vendor
+  const availableModules = selectedVendor ? getVendorById(selectedVendor)?.modules || [] : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -139,6 +161,50 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="vendor-select">Platform/Vendor</Label>
+                <Select value={selectedVendor} onValueChange={(value) => { setSelectedVendor(value); setSelectedModule(''); }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select platform (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vendors.map((vendor) => (
+                      <SelectItem key={vendor.id} value={vendor.id}>
+                        <div className="flex flex-col">
+                          <span>{vendor.name}</span>
+                          <span className="text-xs text-muted-foreground">{vendor.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="module-select">Module</Label>
+                <Select 
+                  value={selectedModule} 
+                  onValueChange={setSelectedModule}
+                  disabled={!selectedVendor}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select module (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModules.map((module) => (
+                      <SelectItem key={module.id} value={module.id}>
+                        <div className="flex flex-col">
+                          <span>{module.name}</span>
+                          <span className="text-xs text-muted-foreground">{module.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="model-select">AI Model</Label>
@@ -232,12 +298,52 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
               </div>
               <Textarea
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => { setQuery(e.target.value); validateQuery(e.target.value); }}
                 placeholder="Generated CQL query will appear here..."
                 rows={12}
                 className="font-mono text-sm"
               />
             </div>
+
+            {validationResult && (
+              <div className="space-y-2">
+                <Label>Validation Results</Label>
+                <Alert variant={validationResult.valid ? "default" : "destructive"}>
+                  <div className="flex items-center gap-2">
+                    {validationResult.valid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4" />
+                    )}
+                    <span className="font-medium">
+                      {validationResult.valid ? 'Query validation passed' : 'Query validation issues found'}
+                    </span>
+                  </div>
+                  {!validationResult.valid && validationResult.missing.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium mb-1">Missing field mappings:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {validationResult.missing.map((field) => (
+                          <Badge key={field} variant="destructive" className="text-xs">
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {validationResult.warnings.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium mb-1">Warnings:</p>
+                      <ul className="text-xs text-muted-foreground list-disc list-inside">
+                        {validationResult.warnings.map((warning, index) => (
+                          <li key={index}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Alert>
+              </div>
+            )}
 
             {query && (
               <div className="space-y-2">
