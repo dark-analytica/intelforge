@@ -19,6 +19,7 @@ interface IOCExtractorProps {
 export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
   const [inputText, setInputText] = useState('');
   const [includePrivate, setIncludePrivate] = useState(false);
+  const [filterLegitimate, setFilterLegitimate] = useState(true);
   const [isExtracting, setIsExtracting] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const { toast } = useToast();
@@ -30,7 +31,7 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
     
     setIsExtracting(true);
     setTimeout(() => {
-      const extractedIOCs = extractIOCs(inputText, includePrivate);
+      const extractedIOCs = extractIOCs(inputText, includePrivate, filterLegitimate);
       onIOCsExtracted(extractedIOCs);
       setIsExtracting(false);
     }, 500); // Simulate processing time
@@ -145,6 +146,17 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
               />
               <label htmlFor="includePrivate" className="text-sm">
                 Include private IP ranges
+              </label>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="filterLegitimate"
+                checked={filterLegitimate}
+                onCheckedChange={(checked) => setFilterLegitimate(checked as boolean)}
+              />
+              <label htmlFor="filterLegitimate" className="text-sm">
+                Filter website navigation (recommended)
               </label>
             </div>
           </div>

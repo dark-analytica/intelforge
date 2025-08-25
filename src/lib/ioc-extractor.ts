@@ -30,6 +30,55 @@ const patterns = {
   email: /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g
 };
 
+// Common legitimate website patterns to filter out
+const legitWebsitePatterns = [
+  // Social media and common platforms
+  /\b(facebook|twitter|linkedin|instagram|youtube|github|reddit)\.com\b/i,
+  /\b(google|microsoft|apple|amazon|cloudflare)\.com\b/i,
+  /\b(stackoverflow|wikipedia|w3\.org|mozilla\.org)\.com?\b/i,
+  
+  // CDNs and common services  
+  /\b(unpkg|jsdelivr|cdnjs|googleapis|bootstrapcdn|jquery)\.com?\b/i,
+  /\b(gravatar|disqus|addthis|shareaholic)\.com\b/i,
+  
+  // Common website infrastructure
+  /\b(docs?\.|support\.|help\.|kb\.|faq\.|blog\.|news\.|www\.)[\w.-]+\.(com|org|net|edu|gov)\b/i,
+  /\b[\w.-]+\.(png|jpg|jpeg|gif|webp|svg|ico|css|js|woff|ttf|pdf|mp4|avi|mp3)\b/i,
+  
+  // Analytics and tracking (legitimate)
+  /\b(analytics\.google|googletagmanager|doubleclick|adsystem\.google)\.com\b/i,
+  /\b(google-analytics|gtag|ga\.js)\b/i,
+];
+
+// Common benign URL paths that are likely navigation/resources
+const benignUrlPaths = [
+  /\/(about|contact|privacy|terms|support|help|faq|blog|news)$/i,
+  /\/(css|js|images?|assets?|static|media|fonts?)\//i,
+  /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|ttf|pdf|mp4|avi|mp3)(\?.*)?$/i,
+  /\/wp-(content|includes|admin)\//i,
+  /\/(node_modules|bower_components)\//i,
+];
+
+// Email domains that are typically benign
+const legitEmailDomains = [
+  /\b(gmail|outlook|hotmail|yahoo|aol|icloud|protonmail)\.com\b/i,
+  /\b(microsoft|google|apple|amazon)\.com\b/i,
+  /\b[\w.-]+@[\w.-]+\.(edu|gov|mil)\b/i, // Educational/government
+];
+
+const isLegitimateWebsiteUrl = (url: string): boolean => {
+  return legitWebsitePatterns.some(pattern => pattern.test(url)) ||
+         benignUrlPaths.some(pattern => pattern.test(url));
+};
+
+const isLegitimateEmail = (email: string): boolean => {
+  return legitEmailDomains.some(pattern => pattern.test(email));
+};
+
+const isLegitimateWebsiteDomain = (domain: string): boolean => {
+  return legitWebsitePatterns.some(pattern => pattern.test(domain));
+};
+
 // RFC1918 and ULA ranges to exclude
 const privateRanges = [
   /^10\./,
@@ -46,7 +95,7 @@ const isPrivateIP = (ip: string): boolean => {
   return privateRanges.some(range => range.test(ip));
 };
 
-export const extractIOCs = (text: string, includePrivate = false): IOCSet => {
+export const extractIOCs = (text: string, includePrivate = false, filterLegitimate = true): IOCSet => {
   // Normalize common defanged formats (hxxp, [.] etc.) to improve extraction
   const normalizeText = (t: string) => {
     let s = t;
@@ -91,10 +140,20 @@ export const extractIOCs = (text: string, includePrivate = false): IOCSet => {
   iocs.ipv6 = extractAndNormalize(patterns.ipv6, 'ipv6', (ip) => ip.toLowerCase());
   iocs.sha256 = extractAndNormalize(patterns.sha256, 'sha256', (hash) => hash.toLowerCase());
   iocs.md5 = extractAndNormalize(patterns.md5, 'md5', (hash) => hash.toLowerCase());
-  iocs.emails = extractAndNormalize(patterns.email, 'emails', (email) => email.toLowerCase());
   
-  // Extract URLs first, then domains (excluding domains from URLs)
-  iocs.urls = extractAndNormalize(patterns.url, 'urls', (url) => url.toLowerCase());
+  // Extract URLs with filtering
+  const allUrls = extractAndNormalize(patterns.url, 'urls', (url) => url.toLowerCase());
+  iocs.urls = filterLegitimate 
+    ? allUrls.filter(url => !isLegitimateWebsiteUrl(url))
+    : allUrls;
+  
+  // Extract email addresses with filtering
+  const allEmails = extractAndNormalize(patterns.email, 'emails', (email) => email.toLowerCase());
+  iocs.emails = filterLegitimate
+    ? allEmails.filter(email => !isLegitimateEmail(email))
+    : allEmails;
+  
+  // Extract domains, excluding those from URLs and filtering out legitimate ones
   const urlDomains = new Set(iocs.urls.map(url => {
     try {
       return new URL(url).hostname.toLowerCase();
@@ -104,7 +163,13 @@ export const extractIOCs = (text: string, includePrivate = false): IOCSet => {
   }).filter(Boolean));
   
   const allDomains = extractAndNormalize(patterns.domain, 'domains', (domain) => domain.toLowerCase());
-  iocs.domains = allDomains.filter(domain => !urlDomains.has(domain));
+  let filteredDomains = allDomains.filter(domain => !urlDomains.has(domain));
+  
+  if (filterLegitimate) {
+    filteredDomains = filteredDomains.filter(domain => !isLegitimateWebsiteDomain(domain));
+  }
+  
+  iocs.domains = filteredDomains;
 
   return iocs;
 };
