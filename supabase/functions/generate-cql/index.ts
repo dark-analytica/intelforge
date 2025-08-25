@@ -58,43 +58,75 @@ Your task is to:
 CONTEXT:
 - Platform: CrowdStrike Falcon LogScale (Humio)
 - Query Language: CQL (Common Query Language)
-- Environment: Enterprise security monitoring
+- Environment: Enterprise security monitoring with Azure integration
 - Focus on: Security events, logs, and threat hunting
 
 CQL SYNTAX REFERENCE:
 - Basic search: field=value, field!=value, field~"regex"
 - Logical operators: AND, OR, NOT
-- Functions: count(), groupBy(), stats(), sort(), limit()
-- Time: @timestamp, bucket(), now(), relative times (-1d, -1h)
-- Aggregations: sum(), avg(), min(), max(), count()
-- String functions: match(), contains(), startsWith(), endsWith()
-- Network: cidr(), ip()
+- Functions: count(), groupBy(), stats(), sort(), limit(), top()
+- Time: @timestamp, bucket(), now(), relative times (-1d, -1h, -24h)
+- Aggregations: sum(), avg(), min(), max(), count(), distinct()
+- String functions: match(), contains(), startsWith(), endsWith(), regex()
+- Network: cidr(), ip(), geoip()
+- Geographic: country(), region(), city(), latitude(), longitude()
 - File operations: file.*, process.*
-- Visualization: | stats count() as total | table(), | chart(), | map()
+- Visualization: | stats | table(), | chart(), | worldmap(), | geostats()
 
-COMMON PATTERNS:
+AZURE INTEGRATION PATTERNS:
+- Azure logs: sourcetype="azure:*" OR index="azure_*" OR source="azure"
+- Azure AD events: sourcetype="azure:aad:*" OR EventName="SigninLogs"
+- Azure authentication: sourcetype="azure:aad:signin" OR EventName="UserLoginEvent"
+- Risk scores: RiskLevel, RiskScore, riskLevel (1-5 scale where: 1-2=Low, 3=Medium, 4-5=High/Critical)
+- Geographic fields: Country, Region, City, IPAddress, Location, GeoInfo
+- User fields: UserPrincipalName, UserId, UserDisplayName, UserType
+
+CROWDSTRIKE PATTERNS:
 - Process events: event_simpleName=ProcessRollup2
 - Network events: event_simpleName=NetworkConnect*
 - File events: event_simpleName=*FileWrite*
 - DNS events: event_simpleName=DnsRequest
 - Authentication: event_simpleName=UserLogon*
 - PowerShell: event_simpleName=ProcessRollup2 AND ImageFileName=*powershell*
-- Azure logs: sourcetype="azure:*"
-- Risk levels: riskScore, riskLevel (1-5, where 3+ is medium-critical)
 
 AUTO-DETECTION RULES:
 - "search for/find" → Search query with filters
-- "count/how many/statistics" → Search + aggregation
-- "map/geographical/location" → Search + aggregation + geographical grouping
-- "correlate/join/match" → Multi-query joins
-- "monitor/alert/detect" → Alert-style continuous queries
-- "trend/over time/timeline" → Time-based aggregations with bucketing
+- "count/how many/statistics" → Search + aggregation with proper grouping
+- "map/geographical/location/display in map format" → Search + geographical aggregation + worldmap visualization
+- "correlate/join/match" → Multi-query joins with proper correlation
+- "monitor/alert/detect" → Alert-style continuous queries with thresholds
+- "trend/over time/timeline" → Time-based aggregations with bucket() function
 
-VISUALIZATION HINTS:
-- Map format: Include geographic fields (country, region, ip) in groupBy
-- Chart format: Use bucket() for time series, groupBy for categories  
-- Table format: Use | table field1, field2, field3
-- Statistics: Use | stats count(), sum(), avg() etc.
+VISUALIZATION ENHANCEMENTS:
+- Map format queries MUST include:
+  * Geographic field extraction (country(), region(), city())
+  * IP geolocation (geoip() function)
+  * Proper aggregation by geographic fields
+  * Use | worldmap() or | geostats() for visualization
+  * Include count, sum, or other metrics per location
+
+RISK LEVEL HANDLING:
+- Medium to Critical: riskLevel >= 3 OR RiskScore >= 3 OR RiskLevel IN ["Medium", "High", "Critical"]
+- Always include multiple risk field variations for Azure logs
+- Consider both numeric (1-5) and text-based risk classifications
+
+COMPREHENSIVE QUERY BUILDING:
+- Always include time boundaries (@timestamp >= now()-24h)
+- Use proper field extraction and enrichment
+- Include error handling with null checks
+- Add meaningful field aliases for better readability
+- Use proper sorting and limiting for performance
+
+Example Azure Authentication Map Query Structure:
+sourcetype="azure:*" AND (EventName="SigninLogs" OR event_simpleName=UserLogon*) 
+AND (riskLevel >= 3 OR RiskScore >= 3) 
+AND @timestamp >= now()-24h
+| eval geo_country = coalesce(country(IPAddress), Country, "Unknown")
+| eval geo_city = coalesce(city(IPAddress), City, "Unknown") 
+| stats count() as auth_events, distinct(UserPrincipalName) as unique_users by geo_country, geo_city
+| where auth_events > 0
+| sort -auth_events
+| worldmap lat=latitude(geo_city) lon=longitude(geo_city) count=auth_events
 
 Build complete, executable queries that fulfill the entire user request. Include comments for complex logic.
 
