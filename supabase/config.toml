@@ -1,1 +1,4 @@
 project_id = "ukqksgrjauanogudlwei"
+
+[functions.extract-ttps]
+verify_jwt = false

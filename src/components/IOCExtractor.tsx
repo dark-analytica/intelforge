@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { extractIOCs, getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
 import { Scan, Upload, Link } from 'lucide-react';
+import { IOCList } from './IOCList';
+import { TTpExtractor } from './TTpExtractor';
 
 interface IOCExtractorProps {
   onIOCsExtracted: (iocs: IOCSet) => void;
@@ -65,16 +67,56 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
+    setIsExtracting(true);
+    try {
+      let text = '';
+      
+      if (file.type === 'application/pdf') {
+        // PDF parsing using pdfjs-dist
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@latest/build/pdf.worker.min.js';
+        
+        const fileBuffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: fileBuffer }).promise;
+        
+        const textParts: string[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const pageText = content.items
+            .filter((item): item is any => 'str' in item)
+            .map((item: any) => item.str)
+            .join(' ');
+          textParts.push(pageText);
+        }
+        text = textParts.join('\n\n');
+        toast({ title: 'PDF Processed', description: `Extracted text from ${pdf.numPages} pages` });
+      } else {
+        // Regular text file
+        const reader = new FileReader();
+        text = await new Promise<string>((resolve, reject) => {
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(file);
+        });
+        toast({ title: 'File Loaded', description: 'Text file content loaded' });
+      }
+      
       setInputText(text);
-    };
-    reader.readAsText(file);
+    } catch (error: any) {
+      console.error('File processing error:', error);
+      toast({ 
+        title: 'File Processing Failed', 
+        description: error.message || 'Failed to process the uploaded file',
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   return (
@@ -147,28 +189,10 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
         </CardContent>
       </Card>
 
-      {counts.total > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-terminal text-glow">
-              Extracted IOCs ({counts.total})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(counts).map(([type, count]) => {
-                if (type === 'total' || count === 0) return null;
-                return (
-                  <div key={type} className="flex items-center justify-between">
-                    <span className="text-sm capitalize">{type}:</span>
-                    <Badge variant="secondary">{count}</Badge>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      
+      <IOCList iocs={iocs} onIOCsUpdated={onIOCsExtracted} />
+      
+      <TTpExtractor text={inputText} />
     </div>
   );
 };
