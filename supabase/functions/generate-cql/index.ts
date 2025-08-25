@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface CQLGenerationRequest {
   description: string;
-  queryType: string;
   model?: string;
   context?: string;
 }
@@ -37,7 +36,7 @@ serve(async (req) => {
 
   try {
     const body: CQLGenerationRequest = await req.json();
-    const { description, queryType, model = 'gpt-5-2025-08-07', context } = body;
+    const { description, model = 'gpt-5-2025-08-07', context } = body;
 
     if (!description?.trim()) {
       return new Response(JSON.stringify({ error: 'Description is required' }), {
@@ -46,9 +45,15 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Generating CQL query for: ${description} (type: ${queryType}, model: ${model})`);
+    console.log(`Generating CQL query for: ${description} (model: ${model})`);
 
-    const systemPrompt = `You are an expert in CrowdStrike Falcon LogScale (Humio) and CQL (Common Query Language). Generate precise, efficient CQL queries based on user descriptions.
+    const systemPrompt = `You are an expert in CrowdStrike Falcon LogScale (Humio) and CQL (Common Query Language). 
+
+Your task is to:
+1. AUTOMATICALLY determine the appropriate query type(s) needed from the user's natural language description
+2. Build comprehensive, production-ready CQL queries that fulfill the complete request
+3. Combine multiple query types if needed (search + aggregation, joins, etc.)
+4. Include proper visualization hints when requested (maps, charts, tables)
 
 CONTEXT:
 - Platform: CrowdStrike Falcon LogScale (Humio)
@@ -65,6 +70,7 @@ CQL SYNTAX REFERENCE:
 - String functions: match(), contains(), startsWith(), endsWith()
 - Network: cidr(), ip()
 - File operations: file.*, process.*
+- Visualization: | stats count() as total | table(), | chart(), | map()
 
 COMMON PATTERNS:
 - Process events: event_simpleName=ProcessRollup2
@@ -73,27 +79,32 @@ COMMON PATTERNS:
 - DNS events: event_simpleName=DnsRequest
 - Authentication: event_simpleName=UserLogon*
 - PowerShell: event_simpleName=ProcessRollup2 AND ImageFileName=*powershell*
+- Azure logs: sourcetype="azure:*"
+- Risk levels: riskScore, riskLevel (1-5, where 3+ is medium-critical)
 
-QUERY TYPES:
-1. search: Basic filtering and searching
-2. aggregation: Counting, grouping, statistics
-3. join: Correlating multiple data sources
-4. alert: Detection rules and monitoring
+AUTO-DETECTION RULES:
+- "search for/find" → Search query with filters
+- "count/how many/statistics" → Search + aggregation
+- "map/geographical/location" → Search + aggregation + geographical grouping
+- "correlate/join/match" → Multi-query joins
+- "monitor/alert/detect" → Alert-style continuous queries
+- "trend/over time/timeline" → Time-based aggregations with bucketing
 
-BEST PRACTICES:
-- Always include time bounds when possible
-- Use specific field names from CrowdStrike schema
-- Optimize for performance with proper filtering
-- Include comments for complex queries
-- Use proper escaping for special characters
+VISUALIZATION HINTS:
+- Map format: Include geographic fields (country, region, ip) in groupBy
+- Chart format: Use bucket() for time series, groupBy for categories  
+- Table format: Use | table field1, field2, field3
+- Statistics: Use | stats count(), sum(), avg() etc.
+
+Build complete, executable queries that fulfill the entire user request. Include comments for complex logic.
 
 Generate ONLY the CQL query code without explanations or markdown formatting.`;
 
-    const userPrompt = `Generate a ${queryType} CQL query for: ${description}
+    const userPrompt = `Analyze this request and build a comprehensive CQL query: ${description}
 
 Additional context: ${context || 'Standard CrowdStrike Falcon environment'}
 
-Return only the CQL query code.`;
+Automatically determine what type of query is needed and build a complete solution. Return only the CQL query code.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -151,7 +162,6 @@ Return only the CQL query code.`;
 
     return new Response(JSON.stringify({ 
       query: generatedQuery,
-      queryType,
       description 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

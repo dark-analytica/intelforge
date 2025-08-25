@@ -17,7 +17,6 @@ interface CQLBuilderProps {}
 export const CQLBuilder = ({}: CQLBuilderProps) => {
   const [query, setQuery] = useState('');
   const [userInput, setUserInput] = useState('');
-  const [queryType, setQueryType] = useState('search');
   const [selectedModel, setSelectedModel] = useState('gpt-5-2025-08-07');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +61,6 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
       const { data, error: functionError } = await supabase.functions.invoke('generate-cql', {
         body: {
           description: userInput,
-          queryType,
           model: selectedModel,
           context: "CrowdStrike Falcon LogScale (Humio) environment"
         }
@@ -141,20 +139,6 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="query-type">Query Type</Label>
-              <Select value={queryType} onValueChange={setQueryType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="search">Search Query</SelectItem>
-                  <SelectItem value="aggregation">Aggregation Query</SelectItem>
-                  <SelectItem value="join">Join Query</SelectItem>
-                  <SelectItem value="alert">Alert Query</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="model-select">AI Model</Label>
