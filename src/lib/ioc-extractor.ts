@@ -99,7 +99,7 @@ const isPrivateIP = (ip: string): boolean => {
   return privateRanges.some(range => range.test(ip));
 };
 
-export const extractIOCs = (text: string, includePrivate = false, filterLegitimate = true): IOCSet => {
+export const extractIOCs = (text: string, includePrivate = false, filterLegitimate = true, sourceUrl?: string): IOCSet => {
   // Normalize common defanged formats (hxxp, [.] etc.) to improve extraction
   const normalizeText = (t: string) => {
     let s = t;
@@ -147,9 +147,27 @@ export const extractIOCs = (text: string, includePrivate = false, filterLegitima
   
   // Extract URLs with filtering
   const allUrls = extractAndNormalize(patterns.url, 'urls', (url) => url.toLowerCase());
-  iocs.urls = filterLegitimate 
+  let filteredUrls = filterLegitimate 
     ? allUrls.filter(url => !isLegitimateWebsiteUrl(url))
     : allUrls;
+  
+  // Filter out source URL domain if provided
+  if (sourceUrl && filterLegitimate) {
+    try {
+      const sourceDomain = new URL(sourceUrl).hostname.toLowerCase();
+      filteredUrls = filteredUrls.filter(url => {
+        try {
+          return new URL(url).hostname.toLowerCase() !== sourceDomain;
+        } catch {
+          return true;
+        }
+      });
+    } catch {
+      // Invalid source URL, continue without filtering
+    }
+  }
+  
+  iocs.urls = filteredUrls;
   
   // Extract email addresses with filtering
   const allEmails = extractAndNormalize(patterns.email, 'emails', (email) => email.toLowerCase());
@@ -171,6 +189,16 @@ export const extractIOCs = (text: string, includePrivate = false, filterLegitima
   
   if (filterLegitimate) {
     filteredDomains = filteredDomains.filter(domain => !isLegitimateWebsiteDomain(domain));
+  }
+  
+  // Filter out source domain if provided
+  if (sourceUrl && filterLegitimate) {
+    try {
+      const sourceDomain = new URL(sourceUrl).hostname.toLowerCase();
+      filteredDomains = filteredDomains.filter(domain => domain !== sourceDomain);
+    } catch {
+      // Invalid source URL, continue without filtering
+    }
   }
   
   iocs.domains = filteredDomains;

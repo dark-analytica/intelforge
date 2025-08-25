@@ -8,6 +8,7 @@ import { SettingsDialog } from '@/components/SettingsDialog';
 import { HelpDialog } from '@/components/HelpDialog';
 import { ExportDialog } from '@/components/ExportDialog';
 import { HuntSuggestions } from '@/components/HuntSuggestions';
+import { CQLBuilder } from '@/components/CQLBuilder';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +61,8 @@ const Index = () => {
         return <CQLGenerator iocs={iocs} onQueriesGenerated={setGeneratedQueries} />;
       case 'hunts':
         return <HuntSuggestions iocs={iocs} onApplyHunt={handleApplyHunt} />;
+      case 'cql-builder':
+        return <CQLBuilder />;
       case 'exports':
         return (
           <Card>
@@ -200,6 +203,7 @@ const Index = () => {
                   {activeSection === 'ingest' && 'IOC Extraction'}
                   {activeSection === 'queries' && 'CQL Generation'}
                   {activeSection === 'hunts' && 'Hunt Ideas'}
+                  {activeSection === 'cql-builder' && 'CQL Builder'}
                   {activeSection === 'exports' && 'Export Data'}
                   {activeSection === 'settings' && 'Settings'}
                 </h2>

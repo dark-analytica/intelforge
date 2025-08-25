@@ -15,7 +15,61 @@ export interface ExportData {
 }
 
 export const exportToCQL = (queries: string[]): string => {
-  return queries.join('\n\n-- Next Query --\n\n');
+  const header = `# CQL Query Bundle\n\nGenerated on: ${new Date().toISOString()}\n\n---\n\n`;
+  const content = queries.map((query, index) => 
+    `## Query ${index + 1}\n\n\`\`\`cql\n${query}\n\`\`\``
+  ).join('\n\n---\n\n');
+  return header + content;
+};
+
+export const exportToMitreNavigator = (ttps: any[]): string => {
+  const navigator = {
+    name: "CTI Analysis",
+    versions: {
+      attack: "14",
+      navigator: "4.9.1",
+      layer: "4.5"
+    },
+    domain: "enterprise-attack",
+    description: "Generated from threat intelligence analysis",
+    filters: {
+      platforms: ["windows", "linux", "macos"]
+    },
+    sorting: 0,
+    layout: {
+      layout: "side",
+      aggregateFunction: "average",
+      showID: false,
+      showName: true,
+      showAggregateScores: false,
+      countUnscored: false
+    },
+    hideDisabled: false,
+    techniques: ttps.map(ttp => ({
+      techniqueID: ttp.technique_id,
+      tactic: ttp.tactic || "unknown",
+      color: "#ff6666",
+      comment: ttp.behavior || "",
+      enabled: true,
+      metadata: [],
+      links: [],
+      showSubtechniques: false
+    })),
+    gradient: {
+      colors: ["#ff6666", "#ffe766", "#8ec843"],
+      minValue: 0,
+      maxValue: 100
+    },
+    legendItems: [],
+    metadata: [],
+    links: [],
+    showTacticRowBackground: false,
+    tacticRowBackground: "#dddddd",
+    selectTechniquesAcrossTactics: true,
+    selectSubtechniquesWithParent: false
+  };
+  
+  return JSON.stringify(navigator, null, 2);
 };
 
 export const exportToCSV = (iocs: IOCSet): string => {

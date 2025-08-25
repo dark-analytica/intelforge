@@ -1,4 +1,35 @@
 project_id = "ukqksgrjauanogudlwei"
 
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[ingest]
+enabled = false
+
+[auth]
+enabled = true
+port = 54324
+
+[edge_functions]
+enabled = true
+port = 54325
+
+[[edge_functions.env_files]]
+type = "native"
+
 [functions.extract-ttps]
+verify_jwt = false
+
+[functions.generate-cql]
 verify_jwt = false

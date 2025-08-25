@@ -22,6 +22,7 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
   const [filterLegitimate, setFilterLegitimate] = useState(true);
   const [isExtracting, setIsExtracting] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [lastFetchedUrl, setLastFetchedUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const counts = getIOCCounts(iocs);
@@ -31,7 +32,7 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
     
     setIsExtracting(true);
     setTimeout(() => {
-      const extractedIOCs = extractIOCs(inputText, includePrivate, filterLegitimate);
+      const extractedIOCs = extractIOCs(inputText, includePrivate, filterLegitimate, lastFetchedUrl || undefined);
       onIOCsExtracted(extractedIOCs);
       setIsExtracting(false);
     }, 500); // Simulate processing time
@@ -50,7 +51,10 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       setInputText(text);
-      toast({ title: 'Fetched URL', description: 'Content loaded into the editor.' });
+      setLastFetchedUrl(url);
+      const extracted = extractIOCs(text, includePrivate, filterLegitimate, url);
+      onIOCsExtracted(extracted);
+      toast({ title: 'Fetched URL', description: 'Content loaded and IOCs extracted automatically.' });
     } catch (e: any) {
       // Fallback to a public, read-only CORS-friendly fetcher
       try {
@@ -59,7 +63,10 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
         if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
         const text2 = await res2.text();
         setInputText(text2);
-        toast({ title: 'Fetched via fallback', description: 'Loaded using public proxy (read-only).' });
+        setLastFetchedUrl(url);
+        const extracted = extractIOCs(text2, includePrivate, filterLegitimate, url);
+        onIOCsExtracted(extracted);
+        toast({ title: 'Fetched via fallback', description: 'Content loaded and IOCs extracted automatically.' });
       } catch {
         toast({ title: 'Fetch failed', description: 'CORS or network blocked. Configure a proxy in Settings.', variant: 'destructive' });
       }

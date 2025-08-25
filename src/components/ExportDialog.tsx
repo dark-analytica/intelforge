@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, Copy } from 'lucide-react';
 import { IOCSet } from '@/lib/ioc-extractor';
-import { exportToCQL, exportToCSV, exportToSTIX, exportToJSON, downloadFile } from '@/lib/exporters';
+import { exportToCQL, exportToCSV, exportToSTIX, exportToJSON, exportToMitreNavigator, downloadFile } from '@/lib/exporters';
 import { useToast } from '@/hooks/use-toast';
 
 interface ExportDialogProps {
@@ -261,11 +261,27 @@ ${query.cql || query}
   };
 
   const handleDownload = (content: string, filename: string, mimeType: string) => {
-    downloadFile(content, filename, mimeType);
-    toast({
-      title: "Download started",
-      description: `${filename} download initiated`
-    });
+    try {
+      downloadFile(content, filename, mimeType);
+      toast({
+        title: "Downloaded",
+        description: `${filename} has been downloaded.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download the file.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const createMitreNavigator = () => {
+    if (!ttps || ttps.length === 0) {
+      return JSON.stringify({ error: "No TTPs available" }, null, 2);
+    }
+    
+    return exportToMitreNavigator(ttps);
   };
 
   const ExportCard = ({ 
@@ -363,24 +379,25 @@ ${query.cql || query}
         </DialogHeader>
 
         <Tabs defaultValue="cql" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="cql">CQL Bundle</TabsTrigger>
-            <TabsTrigger value="csv">Enhanced CSV</TabsTrigger>
-            <TabsTrigger value="stix">STIX 2.1</TabsTrigger>
-            <TabsTrigger value="json">Complete JSON</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="cql">CQL</TabsTrigger>
+            <TabsTrigger value="csv">CSV</TabsTrigger>
+            <TabsTrigger value="stix">STIX</TabsTrigger>
+            <TabsTrigger value="mitre">MITRE</TabsTrigger>
+            <TabsTrigger value="json">JSON</TabsTrigger>
           </TabsList>
 
           <TabsContent value="cql" className="mt-6">
             <ExportCard
               title="CQL Query Bundle"
-              description="Vendor-aware CQL queries with metadata and validation status"
+              description="Ready-to-use CQL queries for LogScale/Humio"
               content={cqlContent}
-              filename="cql-queries.cql"
-              mimeType="text/plain"
+              filename="cql-queries.md"
+              mimeType="text/markdown"
               stats={[
                 { label: 'Queries', value: stats.totalQueries.toString() },
-                { label: 'Vendor', value: queries[0]?.vendor || 'Mixed' },
-                { label: 'Module', value: queries[0]?.module || 'Mixed' }
+                { label: 'IOCs', value: stats.totalIOCs.toString() },
+                { label: 'TTPs', value: stats.totalTTPs.toString() }
               ]}
             />
           </TabsContent>
@@ -411,6 +428,20 @@ ${query.cql || query}
                 { label: 'Objects', value: (JSON.parse(stixContent).objects?.length || 0).toString() },
                 { label: 'Indicators', value: stats.totalIOCs.toString() },
                 { label: 'Attack Patterns', value: stats.totalTTPs.toString() }
+              ]}
+            />
+          </TabsContent>
+
+          <TabsContent value="mitre" className="mt-6">
+            <ExportCard
+              title="MITRE ATT&CK Navigator"
+              description="Import into MITRE ATT&CK Navigator for visualization"
+              content={createMitreNavigator()}
+              filename="mitre-navigator.json"
+              mimeType="application/json"
+              stats={[
+                { label: 'Techniques', value: stats.totalTTPs.toString() },
+                { label: 'Compatible', value: 'ATT&CK Navigator' }
               ]}
             />
           </TabsContent>
