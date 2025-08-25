@@ -9,6 +9,7 @@ const corsHeaders = {
 interface CQLGenerationRequest {
   description: string;
   queryType: string;
+  model?: string;
   context?: string;
 }
 
@@ -36,7 +37,7 @@ serve(async (req) => {
 
   try {
     const body: CQLGenerationRequest = await req.json();
-    const { description, queryType, context } = body;
+    const { description, queryType, model = 'gpt-5-2025-08-07', context } = body;
 
     if (!description?.trim()) {
       return new Response(JSON.stringify({ error: 'Description is required' }), {
@@ -45,7 +46,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Generating CQL query for: ${description} (type: ${queryType})`);
+    console.log(`Generating CQL query for: ${description} (type: ${queryType}, model: ${model})`);
 
     const systemPrompt = `You are an expert in CrowdStrike Falcon LogScale (Humio) and CQL (Common Query Language). Generate precise, efficient CQL queries based on user descriptions.
 
@@ -101,7 +102,7 @@ Return only the CQL query code.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5-2025-08-07',
+        model: model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }

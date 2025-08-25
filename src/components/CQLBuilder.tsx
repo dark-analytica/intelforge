@@ -18,9 +18,23 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
   const [query, setQuery] = useState('');
   const [userInput, setUserInput] = useState('');
   const [queryType, setQueryType] = useState('search');
+  const [selectedModel, setSelectedModel] = useState('gpt-5-2025-08-07');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const modelOptions = [
+    { value: 'gpt-5-2025-08-07', label: 'GPT-5 (2025-08-07)', description: 'Latest flagship model' },
+    { value: 'gpt-5', label: 'GPT-5', description: 'Flagship model' },
+    { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini (2025-08-07)', description: 'Latest efficient model' },
+    { value: 'gpt-5-mini', label: 'GPT-5 Mini', description: 'Efficient model' },
+    { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano (2025-08-07)', description: 'Latest fastest model' },
+    { value: 'gpt-5-nano', label: 'GPT-5 Nano', description: 'Fastest model' },
+    { value: 'gpt-4o', label: 'GPT-4o', description: 'Powerful legacy model' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast legacy model' },
+    { value: 'gpt-4', label: 'GPT-4', description: 'Legacy model' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', description: 'Budget model' }
+  ];
 
   const examplePrompts = [
     "Find all PowerShell executions with encoded commands",
@@ -49,6 +63,7 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
         body: {
           description: userInput,
           queryType,
+          model: selectedModel,
           context: "CrowdStrike Falcon LogScale (Humio) environment"
         }
       });
@@ -137,6 +152,25 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
                   <SelectItem value="aggregation">Aggregation Query</SelectItem>
                   <SelectItem value="join">Join Query</SelectItem>
                   <SelectItem value="alert">Alert Query</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="model-select">AI Model</Label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelOptions.map((model) => (
+                    <SelectItem key={model.value} value={model.value}>
+                      <div className="flex flex-col">
+                        <span>{model.label}</span>
+                        <span className="text-xs text-muted-foreground">{model.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
