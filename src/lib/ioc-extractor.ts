@@ -47,6 +47,23 @@ const isPrivateIP = (ip: string): boolean => {
 };
 
 export const extractIOCs = (text: string, includePrivate = false): IOCSet => {
+  // Normalize common defanged formats (hxxp, [.] etc.) to improve extraction
+  const normalizeText = (t: string) => {
+    let s = t;
+    // Normalize hxxp/hxxps
+    s = s.replace(/hxxp(s?):\/\//gi, 'http$1://');
+    // Normalize defanged dots
+    s = s.replace(/\[\.\]/g, '.'); // [.] -> .
+    s = s.replace(/\(dot\)/gi, '.'); // (dot) -> .
+    s = s.replace(/\[dot\]/gi, '.'); // [dot] -> .
+    s = s.replace(/(\(|\{|\[)\.(\)|\}|\])/g, '.'); // (.) / {.} / [.] -> .
+    // Remove zero-width chars
+    s = s.replace(/[\u200B-\u200D\uFEFF]/g, '');
+    return s;
+  };
+
+  const source = normalizeText(text);
+
   const iocs: IOCSet = {
     ipv4: [],
     ipv6: [],
@@ -59,8 +76,8 @@ export const extractIOCs = (text: string, includePrivate = false): IOCSet => {
 
   // Extract and normalize each IOC type
   const extractAndNormalize = (pattern: RegExp, type: keyof IOCSet, normalizer?: (s: string) => string) => {
-    const matches = text.match(pattern) || [];
-    const normalized = matches.map(match => normalizer ? normalizer(match) : match);
+    const matches = source.match(pattern) || [];
+    const normalized = matches.map(match => (normalizer ? normalizer(match) : match).trim());
     const unique = [...new Set(normalized)];
     
     if (type === 'ipv4' && !includePrivate) {

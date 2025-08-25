@@ -39,6 +39,7 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
     if (!raw) return;
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 
+    setIsExtracting(true);
     try {
       const proxy = localStorage.getItem('cqlforge_proxy_url');
       const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(url)}` : url;
@@ -48,7 +49,19 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
       setInputText(text);
       toast({ title: 'Fetched URL', description: 'Content loaded into the editor.' });
     } catch (e: any) {
-      toast({ title: 'Fetch failed', description: 'CORS or network blocked. Configure a proxy in Settings.', variant: 'destructive' });
+      // Fallback to a public, read-only CORS-friendly fetcher
+      try {
+        const alt = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, '')}`;
+        const res2 = await fetch(alt);
+        if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
+        const text2 = await res2.text();
+        setInputText(text2);
+        toast({ title: 'Fetched via fallback', description: 'Loaded using public proxy (read-only).' });
+      } catch {
+        toast({ title: 'Fetch failed', description: 'CORS or network blocked. Configure a proxy in Settings.', variant: 'destructive' });
+      }
+    } finally {
+      setIsExtracting(false);
     }
   };
 
