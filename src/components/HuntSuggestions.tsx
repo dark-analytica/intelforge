@@ -11,10 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 
 interface HuntSuggestionsProps {
   iocs: IOCSet;
+  ttps?: any[];
   onApplyHunt?: (template: string, huntId: string) => void;
 }
 
-export const HuntSuggestions = ({ iocs, onApplyHunt }: HuntSuggestionsProps) => {
+export const HuntSuggestions = ({ iocs, ttps = [], onApplyHunt }: HuntSuggestionsProps) => {
   const [copiedHunt, setCopiedHunt] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -62,7 +63,7 @@ export const HuntSuggestions = ({ iocs, onApplyHunt }: HuntSuggestionsProps) => 
     );
   }
 
-  const huntIdeas = generateHuntIdeas(iocData);
+  const huntIdeas = generateHuntIdeas(iocData, ttps);
 
   return (
     <div className="space-y-6">
@@ -73,15 +74,15 @@ export const HuntSuggestions = ({ iocs, onApplyHunt }: HuntSuggestionsProps) => 
             Hunt Suggestions
           </CardTitle>
           <CardDescription>
-            AI-powered hunt ideas based on your extracted IOCs and MITRE ATT&CK techniques
+            AI-powered hunt ideas based on extracted IOCs ({totalIOCs}) and TTPs ({ttps.length}) using the Pyramid of Pain framework
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              <strong>{huntIdeas.length} hunt ideas</strong> generated from {totalIOCs} IOCs. 
-              Each hunt maps to specific MITRE ATT&CK techniques for comprehensive threat coverage.
+              <strong>{huntIdeas.length} hunt ideas</strong> generated from {totalIOCs} IOCs and {ttps.length} TTPs. 
+              Prioritizing TTP-based hunts (highest on Pyramid of Pain) for maximum adversary disruption.
             </AlertDescription>
           </Alert>
         </CardContent>

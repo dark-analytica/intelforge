@@ -14,9 +14,10 @@ import { TTpExtractor } from './TTpExtractor';
 interface IOCExtractorProps {
   onIOCsExtracted: (iocs: IOCSet) => void;
   iocs: IOCSet;
+  onTTPsExtracted?: (ttps: any[], detections: any[], entities: any) => void;
 }
 
-export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
+export const IOCExtractor = ({ onIOCsExtracted, iocs, onTTPsExtracted }: IOCExtractorProps) => {
   const [inputText, setInputText] = useState('');
   const [includePrivate, setIncludePrivate] = useState(false);
   const [filterLegitimate, setFilterLegitimate] = useState(true);
@@ -211,7 +212,12 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
       
       <IOCList iocs={iocs} onIOCsUpdated={onIOCsExtracted} />
       
-      <TTpExtractor text={inputText} />
+      <TTpExtractor 
+        text={inputText} 
+        onExtractionComplete={onTTPsExtracted ? (result) => 
+          onTTPsExtracted(result.ttps, result.detections, result.entities) : undefined
+        }
+      />
     </div>
   );
 };

@@ -56,11 +56,19 @@ const Index = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'ingest':
-        return <IOCExtractor iocs={iocs} onIOCsExtracted={setIOCs} />;
+        return <IOCExtractor 
+          iocs={iocs} 
+          onIOCsExtracted={setIOCs} 
+          onTTPsExtracted={(ttps, detections, entities) => {
+            setExtractedTTPs(ttps);
+            setExtractedDetections(detections);
+            setExtractedEntities(entities);
+          }}
+        />;
       case 'queries':
         return <CQLGenerator iocs={iocs} onQueriesGenerated={setGeneratedQueries} />;
       case 'hunts':
-        return <HuntSuggestions iocs={iocs} onApplyHunt={handleApplyHunt} />;
+        return <HuntSuggestions iocs={iocs} ttps={extractedTTPs || []} onApplyHunt={handleApplyHunt} />;
       case 'cql-builder':
         return <CQLBuilder />;
       case 'exports':

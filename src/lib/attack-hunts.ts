@@ -48,8 +48,25 @@ export const attackTechniques: Record<string, AttackTechnique> = {
   }
 };
 
-export const generateHuntIdeas = (iocs: { [key: string]: string[] }): HuntIdea[] => {
+export const generateHuntIdeas = (iocs: { [key: string]: string[] }, ttps?: any[]): HuntIdea[] => {
   const ideas: HuntIdea[] = [];
+  
+  // TTP-based hunts (highest priority in Pyramid of Pain)
+  if (ttps && ttps.length > 0) {
+    ttps.forEach(ttp => {
+      if (ttp.technique_id) {
+        ideas.push({
+          id: `ttp-${ttp.technique_id}`,
+          title: `${ttp.technique_id} Hunt`,
+          description: `Hunt for ${ttp.behavior || 'behaviors'} based on extracted TTPs`,
+          techniques: [ttp.technique_id],
+          template: 'ttp-behavior-hunt',
+          repo: 'all',
+          confidence: 'high'
+        });
+      }
+    });
+  }
   
   // IP-based hunts
   if (iocs.ipv4?.length > 0 || iocs.ipv6?.length > 0) {
@@ -136,6 +153,7 @@ export const getHuntTemplate = (huntId: string, iocs: { [key: string]: string[] 
 | sort(unique_sources, desc)`;
       
     case 'domain-c2-hunt':
+    case 'domain-dns-hunt':
       return `#type=dns OR #type=proxy
 | in(domain, [${iocs.domains?.map(d => `"${d}"`).join(', ') || ''}])
 | timechart(span=1h, by=domain)
@@ -155,6 +173,14 @@ export const getHuntTemplate = (huntId: string, iocs: { [key: string]: string[] 
 | sort(_count, desc)`;
       
     default:
+      // Handle TTP-based hunts
+      if (huntId.startsWith('ttp-')) {
+        const techniqueId = huntId.replace('ttp-', '');
+        return `#type=*
+| where match(CommandLine, /${techniqueId}/i) OR match(process_path, /${techniqueId}/i) OR match(event_message, /technique/i)
+| table(@timestamp, #type, host, user, CommandLine, process_path, event_message)
+| sort(@timestamp, desc)`;
+      }
       return '// Hunt template not found';
   }
 };

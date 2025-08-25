@@ -346,6 +346,18 @@ export const cqlTemplates: CQLTemplate[] = [
 
   // === GENERIC/ENRICHMENT TEMPLATES ===
   {
+    id: 'ttp-behavior-hunt',
+    name: 'TTP Behavior Hunt',
+    description: 'Hunt for specific TTP behaviors across all data sources',
+    template: `#type=*
+| where match(CommandLine, /{BEHAVIOR_PATTERN}/i) OR match(process_path, /{BEHAVIOR_PATTERN}/i) OR match(event_message, /{BEHAVIOR_PATTERN}/i)
+| table(@timestamp, #type, {HOST_FIELD}, {USERNAME_FIELD}, CommandLine, process_path, event_message)
+| sort(@timestamp, desc)`,
+    placeholders: ['BEHAVIOR_PATTERN', 'HOST_FIELD', 'USERNAME_FIELD'],
+    requiredIOCTypes: [],
+    repo: 'all'
+  },
+  {
     id: 'ioc-enrichment',
     name: 'IOC Enrichment Lookup',
     description: 'Perform IOC enrichment across all data sources',

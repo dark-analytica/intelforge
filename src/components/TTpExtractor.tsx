@@ -47,9 +47,10 @@ interface TTpExtractionResult {
 interface TTpExtractorProps {
   text: string;
   onTTpApply?: (ttp: TTP, detection?: Detection) => void;
+  onExtractionComplete?: (result: TTpExtractionResult) => void;
 }
 
-export const TTpExtractor = ({ text, onTTpApply }: TTpExtractorProps) => {
+export const TTpExtractor = ({ text, onTTpApply, onExtractionComplete }: TTpExtractorProps) => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [result, setResult] = useState<TTpExtractionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +95,12 @@ export const TTpExtractor = ({ text, onTTpApply }: TTpExtractorProps) => {
 
       setResult(data);
       setIsOpen(true);
+      
+      // Call the extraction complete callback if provided
+      if (onExtractionComplete) {
+        onExtractionComplete(data);
+      }
+      
       toast({ 
         title: 'TTPs Extracted', 
         description: `Found ${data.ttps.length} TTPs and ${data.detections.length} detection ideas` 
@@ -175,10 +182,17 @@ export const TTpExtractor = ({ text, onTTpApply }: TTpExtractorProps) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gpt-5-2025-08-07">GPT-5 (Flagship)</SelectItem>
-                <SelectItem value="gpt-5-mini-2025-08-07">GPT-5 Mini (Fast)</SelectItem>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini (Legacy)</SelectItem>
-                <SelectItem value="gpt-4o">GPT-4o (Legacy)</SelectItem>
+                <SelectItem value="gpt-5-2025-08-07">GPT-5 (30K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-5-mini-2025-08-07">GPT-5 Mini (200K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-5-nano-2025-08-07">GPT-5 Nano (200K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-4.1-2025-04-14">GPT-4.1 (30K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-4.1-mini-2025-04-14">GPT-4.1 Mini (200K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-4.1-nano-2025-04-14">GPT-4.1 Nano (200K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="o3-2025-04-16">O3 Reasoning (30K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="o4-mini-2025-04-16">O4 Mini (200K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-4o">GPT-4o Legacy (30K TPM, 500 RPM)</SelectItem>
+                <SelectItem value="gpt-4o-mini">GPT-4o Mini Legacy (Fast)</SelectItem>
+                <SelectItem value="gpt-4o-realtime-preview">GPT-4o Realtime (40K TPM, 200 RPM)</SelectItem>
               </SelectContent>
             </Select>
             <Button 
