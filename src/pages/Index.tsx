@@ -8,6 +8,7 @@ import { SettingsDialog } from '@/components/SettingsDialog';
 import { HelpDialog } from '@/components/HelpDialog';
 import { ExportDialog } from '@/components/ExportDialog';
 import { HuntSuggestions } from '@/components/HuntSuggestions';
+import { HuntPackManager } from '@/components/HuntPackManager';
 import { CQLBuilder } from '@/components/CQLBuilder';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,16 @@ const Index = () => {
     }
   };
 
+  const handleApplyQuery = (query: string, huntId: string) => {
+    try {
+      setGeneratedQueries(prev => [...prev, query]);
+      setActiveSection('queries');
+      trackUserAction('apply_hunt_pack_query', 'HuntPackManager', { huntId });
+    } catch (error) {
+      handleError(error, { component: 'Index', action: 'handleApplyQuery' });
+    }
+  };
+
   const renderContent = () => {
     switch (activeSection) {
       case 'ingest':
@@ -69,6 +80,8 @@ const Index = () => {
         return <CQLGenerator iocs={iocs} onQueriesGenerated={setGeneratedQueries} />;
       case 'hunts':
         return <HuntSuggestions iocs={iocs} ttps={extractedTTPs || []} onApplyHunt={handleApplyHunt} />;
+      case 'hunt-packs':
+        return <HuntPackManager onApplyQuery={handleApplyQuery} />;
       case 'cql-builder':
         return <CQLBuilder />;
       case 'exports':
@@ -211,6 +224,7 @@ const Index = () => {
                   {activeSection === 'ingest' && 'IOC Extraction'}
                   {activeSection === 'queries' && 'CQL Generation'}
                   {activeSection === 'hunts' && 'Hunt Ideas'}
+                  {activeSection === 'hunt-packs' && 'Hunt Packs'}
                   {activeSection === 'cql-builder' && 'CQL Builder'}
                   {activeSection === 'exports' && 'Export Data'}
                   {activeSection === 'settings' && 'Settings'}
