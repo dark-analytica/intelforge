@@ -477,9 +477,9 @@ export const validateCQLSyntax = (cql: string): { valid: boolean; errors: string
     errors.push('Unbalanced quotes in query');
   }
   
-  // Check for valid operators
-  const invalidOperators = cql.match(/[^|\s](=|!=|>|<|>=|<=)[^=]/g);
-  if (invalidOperators && invalidOperators.length > 0) {
+  // Check for missing spaces around comparison operators (safer)
+  const hasTightOperators = /[^\s|](?:!=|>=|<=|=|>|<)[^\s=]/.test(cql);
+  if (hasTightOperators) {
     errors.push('Check operators - ensure proper spacing and syntax');
   }
   
@@ -515,10 +515,12 @@ export const renderTemplateWithVendor = (
 
   const warnings: string[] = [];
   
-  // Check if all required placeholders are available
-  const missingFields = template.placeholders.filter(placeholder => 
-    !vendorProfile.fields[placeholder] && !vendorProfile.repos[placeholder]
-  );
+  // Check if all required vendor mappings are available (ignore IOC placeholders)
+  const ignoredPlaceholders = new Set(['IP_LIST','HASH_LIST','EMAIL_LIST','DOMAIN_LIST','URL_LIST','DOMAIN','DOMAIN_ESCAPED','BEHAVIOR_PATTERN']);
+  const missingFields = template.placeholders.filter((placeholder) => {
+    if (ignoredPlaceholders.has(placeholder)) return false;
+    return !(placeholder in vendorProfile.fields) && !(placeholder in vendorProfile.repos);
+  });
   
   if (missingFields.length > 0) {
     warnings.push(`Missing field mappings: ${missingFields.join(', ')}`);
