@@ -1,3 +1,5 @@
+import { getModuleById } from './vendors';
+
 export interface CQLTemplate {
   id: string;
   name: string;
@@ -488,7 +490,6 @@ export const renderTemplateWithVendor = (
   vendorId: string,
   moduleId: string
 ): { query: string; profile: DataProfile; warnings: string[] } => {
-  const { getModuleById } = require('./vendors');
   const module = getModuleById(vendorId, moduleId);
   
   if (!module) {
