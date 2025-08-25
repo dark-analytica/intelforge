@@ -1,0 +1,131 @@
+import { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { extractIOCs, getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
+import { Scan, Upload, Link } from 'lucide-react';
+
+interface IOCExtractorProps {
+  onIOCsExtracted: (iocs: IOCSet) => void;
+  iocs: IOCSet;
+}
+
+export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
+  const [inputText, setInputText] = useState('');
+  const [includePrivate, setIncludePrivate] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+
+  const counts = getIOCCounts(iocs);
+
+  const handleExtractIOCs = () => {
+    if (!inputText.trim()) return;
+    
+    setIsExtracting(true);
+    setTimeout(() => {
+      const extractedIOCs = extractIOCs(inputText, includePrivate);
+      onIOCsExtracted(extractedIOCs);
+      setIsExtracting(false);
+    }, 500); // Simulate processing time
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setInputText(text);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-terminal text-glow">CTI Ingest</CardTitle>
+          <CardDescription>
+            Paste CTI text, upload a file, or enter a URL to extract IOCs
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Textarea
+            placeholder="Paste your cyber threat intelligence text here..."
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            className="min-h-[200px] font-code"
+          />
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="includePrivate"
+                checked={includePrivate}
+                onCheckedChange={(checked) => setIncludePrivate(checked as boolean)}
+              />
+              <label htmlFor="includePrivate" className="text-sm">
+                Include private IP ranges
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleExtractIOCs}
+              disabled={!inputText.trim() || isExtracting}
+              className="gap-2"
+            >
+              <Scan className="h-4 w-4" />
+              {isExtracting ? 'Extracting...' : 'Extract IOCs'}
+            </Button>
+            
+            <Button variant="outline" className="gap-2" asChild>
+              <label htmlFor="file-upload" className="cursor-pointer">
+                <Upload className="h-4 w-4" />
+                Upload File
+              </label>
+            </Button>
+            <input
+              id="file-upload"
+              type="file"
+              accept=".txt,.pdf"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            
+            <Button variant="outline" disabled className="gap-2">
+              <Link className="h-4 w-4" />
+              Fetch URL
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {counts.total > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-terminal text-glow">
+              Extracted IOCs ({counts.total})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(counts).map(([type, count]) => {
+                if (type === 'total' || count === 0) return null;
+                return (
+                  <div key={type} className="flex items-center justify-between">
+                    <span className="text-sm capitalize">{type}:</span>
+                    <Badge variant="secondary">{count}</Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};
