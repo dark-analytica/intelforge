@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface TTpExtractionRequest {
   text: string;
-  model?: 'gpt-5-mini-2025-08-07' | 'o4-mini-2025-04-16';
+  model?: string; // allow client override; will default to a broadly available model
 }
 
 interface TTP {
@@ -69,7 +69,7 @@ serve(async (req) => {
   }
 
   try {
-    const { text, model = 'gpt-5-mini-2025-08-07' }: TTpExtractionRequest = await req.json();
+    const { text, model = 'gpt-4o-mini' }: TTpExtractionRequest = await req.json();
 
     if (!text?.trim()) {
       return new Response(JSON.stringify({ error: 'Text is required' }), {
@@ -86,7 +86,8 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Processing TTP extraction with model: ${model}, text length: ${text.length}`);
+    let currentModel = model || 'gpt-4o-mini';
+    console.log(`Processing TTP extraction with model: ${currentModel}, text length: ${text.length}`);
 
     const systemPrompt = `You are a cybersecurity analyst specialized in extracting TTPs (Tactics, Techniques, and Procedures) from threat intelligence reports. 
 
@@ -131,44 +132,62 @@ Return ONLY valid JSON with this exact structure:
 
 Focus on accuracy over quantity. Only include TTPs with strong evidence.`;
 
-    const requestBody: any = {
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: text }
-      ],
-      response_format: { type: 'json_object' }
+    const makeBody = (m: string) => {
+      const body: any = {
+        model: m,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: text }
+        ],
+        response_format: { type: 'json_object' }
+      };
+      if (m.startsWith('gpt-5') || m.startsWith('o3') || m.startsWith('o4')) {
+        body.max_completion_tokens = 4000;
+      } else {
+        body.max_tokens = 4000;
+        body.temperature = 0.3;
+      }
+      return body;
     };
 
-    // Use appropriate parameters based on model
-    if (model.startsWith('gpt-5') || model.startsWith('o3') || model.startsWith('o4')) {
-      requestBody.max_completion_tokens = 4000;
-      // No temperature parameter for newer models
-    } else {
-      requestBody.max_tokens = 4000;
-      requestBody.temperature = 0.3;
-    }
+    const callOpenAI = async (m: string) => {
+      console.log(`Calling OpenAI API with model ${m}...`);
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(makeBody(m)),
+      });
+      return resp;
+    };
 
-    console.log('Calling OpenAI API...');
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // First attempt
+    let response = await callOpenAI(currentModel);
 
+    // Fallback on model access errors
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`OpenAI API error (${response.status}):`, errorText);
-      return new Response(JSON.stringify({ 
-        error: `OpenAI API error: ${response.status}`,
-        details: errorText 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error(`OpenAI API error (${response.status}) for model ${currentModel}:`, errorText);
+      const isModelAccessError = errorText.includes('model_not_found') || errorText.includes('does not have access to model');
+      if (isModelAccessError && currentModel !== 'gpt-4o-mini') {
+        currentModel = 'gpt-4o-mini';
+        console.log('Retrying with fallback model gpt-4o-mini...');
+        response = await callOpenAI(currentModel);
+      }
+      if (!response.ok) {
+        const finalText = await response.text();
+        console.error(`OpenAI API error (${response.status}) after fallback:`, finalText);
+        return new Response(JSON.stringify({ 
+          error: `OpenAI API error: ${response.status}`,
+          details: finalText,
+          tried_models: [model, currentModel].filter(Boolean)
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const data = await response.json();
@@ -204,7 +223,7 @@ Focus on accuracy over quantity. Only include TTPs with strong evidence.`;
         tools: [],
         malware: []
       },
-      model_used: model,
+      model_used: currentModel,
       processing_time_ms: processingTime
     };
 
