@@ -3,73 +3,66 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Shield, Target, Copy, CheckCircle, ExternalLink } from 'lucide-react';
-import { IOCSet } from '@/lib/ioc-extractor';
-import { generateHuntIdeas, getHuntTemplate, attackTechniques, type HuntIdea } from '@/lib/attack-hunts';
+import { Separator } from '@/components/ui/separator';
+import { generateHuntIdeas, getHuntTemplate } from '@/lib/attack-hunts';
+import { type IOCSet } from '@/lib/ioc-extractor';
+import { Copy, ExternalLink, Sparkles, Target, Shield, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface HuntSuggestionsProps {
   iocs: IOCSet;
-  onApplyHunt: (template: string, huntId: string) => void;
+  onApplyHunt?: (template: string, huntId: string) => void;
 }
 
 export const HuntSuggestions = ({ iocs, onApplyHunt }: HuntSuggestionsProps) => {
   const [copiedHunt, setCopiedHunt] = useState<string | null>(null);
   const { toast } = useToast();
-  
-  const huntIdeas = generateHuntIdeas(iocs as unknown as { [key: string]: string[] });
-  const totalIOCs = Object.values(iocs).flat().length;
 
   const handleCopyHunt = async (huntId: string, template: string) => {
-    try {
-      await navigator.clipboard.writeText(template);
-      setCopiedHunt(huntId);
-      setTimeout(() => setCopiedHunt(null), 2000);
-      toast({
-        title: "Hunt copied",
-        description: "Hunt template copied to clipboard"
-      });
-    } catch (error) {
-      toast({
-        title: "Copy failed",
-        description: "Failed to copy hunt template",
-        variant: "destructive"
-      });
-    }
+    await navigator.clipboard.writeText(template);
+    setCopiedHunt(huntId);
+    setTimeout(() => setCopiedHunt(null), 2000);
+    toast({
+      title: "Hunt copied to clipboard",
+      description: "The hunt template has been copied to your clipboard"
+    });
   };
 
   const getConfidenceColor = (confidence: string) => {
-    switch (confidence) {
-      case 'high': return 'bg-green-500/10 text-green-400 border-green-500/20';
-      case 'medium': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-      case 'low': return 'bg-red-500/10 text-red-400 border-red-500/20';
-      default: return 'bg-muted text-muted-foreground';
+    switch (confidence.toLowerCase()) {
+      case 'high': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'low': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
     }
   };
 
+  // Convert IOCSet to the format expected by generateHuntIdeas
+  const iocData = {
+    ips: [...iocs.ipv4, ...iocs.ipv6],
+    domains: iocs.domains,
+    hashes: [...iocs.sha256, ...iocs.md5],
+    emails: iocs.emails,
+    urls: iocs.urls
+  };
+
+  const totalIOCs = Object.values(iocs).reduce((sum, arr) => sum + arr.length, 0);
+  
   if (totalIOCs === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-terminal text-glow flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            ATT&CK Hunt Ideas
-          </CardTitle>
-          <CardDescription>
-            AI-generated hunt suggestions mapped to MITRE ATT&CK techniques
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <Target className="h-4 w-4" />
-            <AlertDescription>
-              Extract IOCs first to generate relevant hunt suggestions mapped to MITRE ATT&CK techniques.
-            </AlertDescription>
-          </Alert>
+      <Card className="border-dashed">
+        <CardContent className="pt-6">
+          <div className="text-center text-muted-foreground">
+            <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <h3 className="font-medium mb-2">No IOCs Available</h3>
+            <p className="text-sm">Extract IOCs first to generate AI-powered hunt suggestions</p>
+          </div>
         </CardContent>
       </Card>
     );
   }
+
+  const huntIdeas = generateHuntIdeas(iocData);
 
   return (
     <div className="space-y-6">
@@ -77,124 +70,142 @@ export const HuntSuggestions = ({ iocs, onApplyHunt }: HuntSuggestionsProps) => 
         <CardHeader>
           <CardTitle className="font-terminal text-glow flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            ATT&CK Hunt Ideas
+            Hunt Suggestions
           </CardTitle>
           <CardDescription>
-            Hunt suggestions based on your extracted IOCs, mapped to MITRE ATT&CK techniques
+            AI-powered hunt ideas based on your extracted IOCs and MITRE ATT&CK techniques
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4 mb-4">
-            <Badge variant="outline">{huntIdeas.length} Hunt Ideas</Badge>
-            <Badge variant="outline">{totalIOCs} IOCs Available</Badge>
-          </div>
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              <strong>{huntIdeas.length} hunt ideas</strong> generated from {totalIOCs} IOCs. 
+              Each hunt maps to specific MITRE ATT&CK techniques for comprehensive threat coverage.
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4">
-        {huntIdeas.map((hunt) => {
-          const template = getHuntTemplate(hunt.id, iocs as unknown as { [key: string]: string[] });
-          
-          return (
-            <Card key={hunt.id} className="transition-all hover:shadow-md">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <Target className="h-4 w-4" />
-                      {hunt.title}
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      {hunt.description}
-                    </CardDescription>
-                  </div>
-                  <Badge 
-                    variant="outline" 
-                    className={getConfidenceColor(hunt.confidence)}
-                  >
-                    {hunt.confidence}
-                  </Badge>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium mb-2">MITRE ATT&CK Techniques</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {hunt.techniques.map((techniqueId) => {
-                      const technique = attackTechniques[techniqueId];
-                      return (
-                        <Badge 
-                          key={techniqueId} 
-                          variant="secondary" 
-                          className="gap-1 cursor-pointer hover:bg-secondary/80"
-                          onClick={() => window.open(`https://attack.mitre.org/techniques/${techniqueId}`, '_blank')}
-                        >
-                          {techniqueId}
-                          <ExternalLink className="h-3 w-3" />
+      {huntIdeas.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-muted-foreground">
+              <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <h3 className="font-medium mb-2">No Hunt Suggestions Available</h3>
+              <p className="text-sm">
+                Extract more IOCs or try different IOC types to generate hunt suggestions
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6">
+          {huntIdeas.map((hunt, index) => {
+            const template = getHuntTemplate(hunt.id, iocData);
+            
+            return (
+              <Card key={hunt.id} className="bg-muted/30">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{hunt.title}</CardTitle>
+                        <Badge className={getConfidenceColor(hunt.confidence)}>
+                          {hunt.confidence} confidence
                         </Badge>
-                      );
-                    })}
-                  </div>
-                  
-                  {hunt.techniques.length > 0 && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Tactic: {attackTechniques[hunt.techniques[0]]?.tactic}
+                      </div>
+                      <CardDescription className="text-sm">
+                        {hunt.description}
+                      </CardDescription>
                     </div>
-                  )}
-                </div>
-
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Hunt Template Preview</h4>
-                  <div className="bg-muted/50 border rounded-lg p-3">
-                    <pre className="text-xs font-mono overflow-auto whitespace-pre-wrap">
-                      {template}
-                    </pre>
                   </div>
-                </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  {/* MITRE ATT&CK Techniques */}
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Target className="h-4 w-4" />
+                      MITRE ATT&CK Techniques
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {hunt.techniques.map((techniqueId) => (
+                        <Button
+                          key={techniqueId} 
+                          variant="outline" 
+                          size="sm"
+                          className="text-xs h-6 px-2"
+                          asChild
+                        >
+                          <a 
+                            href={`https://attack.mitre.org/techniques/${techniqueId.replace('.', '/')}/`}
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1"
+                          >
+                            {techniqueId}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyHunt(hunt.id, template)}
-                    className="gap-2"
-                  >
-                    {copiedHunt === hunt.id ? (
-                      <>
-                        <CheckCircle className="h-4 w-4" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-4 w-4" />
-                        Copy Hunt
-                      </>
+                  <Separator />
+
+                  {/* Hunt Template Preview */}
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Hunt Template Preview</h4>
+                    <div className="bg-background rounded-md p-3 font-mono text-sm border">
+                      <pre className="whitespace-pre-wrap text-xs">{template}</pre>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopyHunt(hunt.id, template)}
+                      className="gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copiedHunt === hunt.id ? 'Copied!' : 'Copy Hunt'}
+                    </Button>
+                    
+                    {onApplyHunt && (
+                      <Button
+                        size="sm"
+                        onClick={() => onApplyHunt(template, hunt.id)}
+                        className="gap-2"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Apply to Queries
+                      </Button>
                     )}
-                  </Button>
-                  
-                  <Button
-                    size="sm"
-                    onClick={() => onApplyHunt(template, hunt.id)}
-                    className="gap-2"
-                  >
-                    <Target className="h-4 w-4" />
-                    Apply to Queries
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {huntIdeas.length === 0 && (
-        <Alert>
-          <Shield className="h-4 w-4" />
-          <AlertDescription>
-            No hunt suggestions available for the current IOC types. Try extracting more diverse IOCs (IPs, domains, hashes, emails).
-          </AlertDescription>
-        </Alert>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="gap-2"
+                    >
+                      <a 
+                        href={`https://attack.mitre.org/tactics/`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        View MITRE ATT&CK
+                      </a>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );
