@@ -419,7 +419,42 @@ AND @timestamp >= now()-24h
 | sort -detection_confidence, -events`;
       }
       
-      // Legacy hunt templates
-      return getHuntTemplate(huntId, iocs);
+      // Legacy hunt templates for backward compatibility
+      if (huntId === 'ip-c2-hunt') {
+        return `#type=proxy
+| in(dst_ip, [${allIps.map(ip => `"${ip}"`).join(', ')}])
+| stats dc(src_ip) as unique_sources by dst_ip
+| where unique_sources > 1
+| sort(unique_sources, desc)`;
+      }
+      
+      if (huntId === 'domain-c2-hunt' || huntId === 'domain-dns-hunt') {
+        return `#type=dns OR #type=proxy
+| in(domain, [${iocs.domains?.map(d => `"${d}"`).join(', ') || ''}])
+| timechart(span=1h, by=domain)
+| sort(@timestamp, desc)`;
+      }
+      
+      if (huntId === 'malware-execution-hunt') {
+        return `#type=edr
+| in(sha256, [${allHashes.filter(h => h.length === 64).map(h => `"${h}"`).join(', ')}])
+| table(host, user, process_path, sha256, @timestamp)
+| sort(@timestamp, desc)`;
+      }
+      
+      if (huntId === 'credential-abuse-hunt') {
+        return `#type=idp
+| in(email, [${iocs.emails?.map(e => `"${e}"`).join(', ') || ''}])
+| where action = "login"
+| stats count() by email, src_ip
+| sort(_count, desc)`;
+      }
+      
+      return `// Hunt template not found for: ${huntId}
+// Please check the hunt ID and try again
+#type=*
+| where @timestamp >= now()-24h
+| stats count() by sourcetype
+| sort -count`;
   }
 };
