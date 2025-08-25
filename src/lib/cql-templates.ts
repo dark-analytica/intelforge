@@ -364,11 +364,16 @@ export const cqlTemplates: CQLTemplate[] = [
     name: 'IOC Enrichment Lookup',
     description: 'Perform IOC enrichment across all data sources',
     template: `#type=*
-| ioc:lookup(field={FIELD}, confidenceThreshold=high)
-| where ioc.match = true
-| table(ioc.type, ioc.indicator, {FIELD}, @timestamp)
+| where {DST_IP_FIELD} in [{IP_LIST}] OR {DOMAIN_FIELD} in [{DOMAIN_LIST}]
+| eval ioc_type = case(
+    isnotnull({DST_IP_FIELD}) AND {DST_IP_FIELD} in [{IP_LIST}], "IP Address",
+    isnotnull({DOMAIN_FIELD}) AND {DOMAIN_FIELD} in [{DOMAIN_LIST}], "Domain",
+    "Unknown"
+)
+| eval ioc_value = coalesce({DST_IP_FIELD}, {DOMAIN_FIELD})
+| table(ioc_type, ioc_value, {HOST_FIELD}, {USERNAME_FIELD}, @timestamp)
 | sort(@timestamp, desc)`,
-    placeholders: ['FIELD'],
+    placeholders: ['DST_IP_FIELD', 'DOMAIN_FIELD', 'HOST_FIELD', 'USERNAME_FIELD', 'IP_LIST', 'DOMAIN_LIST'],
     requiredIOCTypes: ['domains', 'ipv4', 'ipv6'],
     repo: 'all'
   },
@@ -417,29 +422,29 @@ export const renderTemplate = (
   });
   
   // Replace IOC list placeholders
-  if (template.requiredIOCTypes.includes('ipv4') || template.requiredIOCTypes.includes('ipv6')) {
-    const ipList = [...iocs.ipv4, ...iocs.ipv6].map(ip => `"${ip}"`).join(', ');
-    rendered = rendered.replace(/{IP_LIST}/g, ipList);
+  if (template.requiredIOCTypes.includes('ipv4') || template.requiredIOCTypes.includes('ipv6') || rendered.includes('{IP_LIST}')) {
+    const ipList = [...(iocs.ipv4 || []), ...(iocs.ipv6 || [])].map(ip => `"${ip}"`).join(', ');
+    rendered = rendered.replace(/{IP_LIST}/g, ipList || '""');
   }
 
-  if (template.requiredIOCTypes.includes('sha256') || template.requiredIOCTypes.includes('md5')) {
-    const hashList = [...iocs.sha256, ...iocs.md5].map(hash => `"${hash}"`).join(', ');
-    rendered = rendered.replace(/{HASH_LIST}/g, hashList);
+  if (template.requiredIOCTypes.includes('sha256') || template.requiredIOCTypes.includes('md5') || rendered.includes('{HASH_LIST}')) {
+    const hashList = [...(iocs.sha256 || []), ...(iocs.md5 || [])].map(hash => `"${hash}"`).join(', ');
+    rendered = rendered.replace(/{HASH_LIST}/g, hashList || '""');
   }
 
-  if (template.requiredIOCTypes.includes('emails')) {
-    const emailList = iocs.emails.map(email => `"${email}"`).join(', ');
-    rendered = rendered.replace(/{EMAIL_LIST}/g, emailList);
+  if (template.requiredIOCTypes.includes('emails') || rendered.includes('{EMAIL_LIST}')) {
+    const emailList = (iocs.emails || []).map(email => `"${email}"`).join(', ');
+    rendered = rendered.replace(/{EMAIL_LIST}/g, emailList || '""');
   }
 
-  if (iocs.domains.length > 0) {
-    const domainList = iocs.domains.map(d => `"${d}"`).join(', ');
-    rendered = rendered.replace(/{DOMAIN_LIST}/g, domainList);
+  if ((iocs.domains && iocs.domains.length > 0) || rendered.includes('{DOMAIN_LIST}')) {
+    const domainList = (iocs.domains || []).map(d => `"${d}"`).join(', ');
+    rendered = rendered.replace(/{DOMAIN_LIST}/g, domainList || '""');
   }
 
-  if (iocs.urls.length > 0) {
-    const urlList = iocs.urls.map(u => `"${u}"`).join(', ');
-    rendered = rendered.replace(/{URL_LIST}/g, urlList);
+  if ((iocs.urls && iocs.urls.length > 0) || rendered.includes('{URL_LIST}')) {
+    const urlList = (iocs.urls || []).map(u => `"${u}"`).join(', ');
+    rendered = rendered.replace(/{URL_LIST}/g, urlList || '""');
   }
 
   // Replace single domain placeholders (for domain templates)
