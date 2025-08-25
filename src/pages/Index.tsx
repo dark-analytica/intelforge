@@ -25,7 +25,12 @@ const Index = () => {
   });
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [generatedQueries, setGeneratedQueries] = useState<string[]>([]);
+  const [generatedQueries, setGeneratedQueries] = useState<any[]>([]);
+  
+  // Phase 4: Enhanced state for TTP tracking
+  const [extractedTTPs, setExtractedTTPs] = useState<any[]>([]);
+  const [extractedDetections, setExtractedDetections] = useState<any[]>([]);
+  const [extractedEntities, setExtractedEntities] = useState<any>(null);
 
   const counts = getIOCCounts(iocs);
 
@@ -196,9 +201,12 @@ const Index = () => {
         <ApiKeysDialog open={apiDialogOpen} onOpenChange={setApiDialogOpen} />
         <ExportDialog 
           open={exportDialogOpen} 
-          onOpenChange={setExportDialogOpen}
-          iocs={iocs}
+          onOpenChange={setExportDialogOpen} 
+          iocs={iocs} 
           queries={generatedQueries}
+          ttps={extractedTTPs}
+          detections={extractedDetections}
+          entities={extractedEntities}
         />
       </div>
     </div>
