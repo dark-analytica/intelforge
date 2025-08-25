@@ -3,6 +3,7 @@ import { Navigation } from '@/components/Navigation';
 import { IOCExtractor } from '@/components/IOCExtractor';
 import { CQLGenerator } from '@/components/CQLGenerator';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import ApiKeysDialog from '@/components/ApiKeysDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,7 @@ const Index = () => {
     md5: [],
     emails: []
   });
+  const [apiDialogOpen, setApiDialogOpen] = useState(false);
 
   const counts = getIOCCounts(iocs);
 
@@ -104,7 +106,7 @@ const Index = () => {
                   <p>• Google Gemini</p>
                   <p>• OpenRouter</p>
                 </div>
-                <Button variant="outline" disabled className="mt-3">
+                <Button variant="outline" className="mt-3" onClick={() => setApiDialogOpen(true)}>
                   Configure API Keys
                 </Button>
               </div>
@@ -172,6 +174,7 @@ const Index = () => {
             {renderContent()}
           </div>
         </main>
+        <ApiKeysDialog open={apiDialogOpen} onOpenChange={setApiDialogOpen} />
       </div>
     </div>
   );

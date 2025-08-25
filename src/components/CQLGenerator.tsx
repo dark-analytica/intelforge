@@ -77,13 +77,14 @@ export const CQLGenerator = ({ iocs }: CQLGeneratorProps) => {
     return 'status-warning';
   };
 
-  // Filter templates based on available IOCs
-  const availableTemplates = cqlTemplates.filter(template => {
-    return template.requiredIOCTypes.some(type => {
-      const iocArray = iocs[type];
-      return iocArray && iocArray.length > 0;
-    });
-  });
+  // Show all templates; we'll disable Generate if required IOCs are missing
+  const availableTemplates = cqlTemplates;
+
+  const hasRequiredIOCs = (templateId: string) => {
+    const tpl = cqlTemplates.find(t => t.id === templateId);
+    if (!tpl) return false;
+    return tpl.requiredIOCTypes.some((type) => (iocs as any)[type]?.length > 0);
+  };
 
   return (
     <div className="space-y-6">
@@ -111,7 +112,7 @@ export const CQLGenerator = ({ iocs }: CQLGeneratorProps) => {
             
             <Button 
               onClick={generateQueries}
-              disabled={!selectedTemplateId}
+              disabled={!selectedTemplateId || !hasRequiredIOCs(selectedTemplateId)}
               className="gap-2"
             >
               Generate CQL
@@ -119,12 +120,15 @@ export const CQLGenerator = ({ iocs }: CQLGeneratorProps) => {
           </div>
 
           {selectedTemplateId && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               {cqlTemplates.find(t => t.id === selectedTemplateId)?.requiredIOCTypes.map(type => (
                 <Badge key={type} variant="outline" className="text-xs">
-                  {type}: {iocs[type]?.length || 0}
+                  {type}: {iocs[type as keyof IOCSet]?.length || 0}
                 </Badge>
               ))}
+              {!hasRequiredIOCs(selectedTemplateId) && (
+                <span className="text-xs text-muted-foreground">Add matching IOCs to enable generation.</span>
+              )}
             </div>
           )}
         </CardContent>

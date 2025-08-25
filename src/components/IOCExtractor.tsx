@@ -4,6 +4,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import { extractIOCs, getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
 import { Scan, Upload, Link } from 'lucide-react';
 
@@ -16,6 +18,8 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
   const [inputText, setInputText] = useState('');
   const [includePrivate, setIncludePrivate] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const { toast } = useToast();
 
   const counts = getIOCCounts(iocs);
 
@@ -28,6 +32,24 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
       onIOCsExtracted(extractedIOCs);
       setIsExtracting(false);
     }, 500); // Simulate processing time
+  };
+
+  const handleFetchURL = async () => {
+    const raw = urlInput.trim();
+    if (!raw) return;
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    try {
+      const proxy = localStorage.getItem('cqlforge_proxy_url');
+      const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(url)}` : url;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      setInputText(text);
+      toast({ title: 'Fetched URL', description: 'Content loaded into the editor.' });
+    } catch (e: any) {
+      toast({ title: 'Fetch failed', description: 'CORS or network blocked. Configure a proxy in Settings.', variant: 'destructive' });
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,6 +95,19 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
           </div>
 
           <div className="flex gap-2">
+            <Input
+              placeholder="https://example.com/cti.txt"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              className="font-code"
+            />
+            <Button variant="outline" className="gap-2" onClick={handleFetchURL}>
+              <Link className="h-4 w-4" />
+              Fetch URL
+            </Button>
+          </div>
+
+          <div className="flex gap-2">
             <Button 
               onClick={handleExtractIOCs}
               disabled={!inputText.trim() || isExtracting}
@@ -95,11 +130,6 @@ export const IOCExtractor = ({ onIOCsExtracted, iocs }: IOCExtractorProps) => {
               className="hidden"
               onChange={handleFileUpload}
             />
-            
-            <Button variant="outline" disabled className="gap-2">
-              <Link className="h-4 w-4" />
-              Fetch URL
-            </Button>
           </div>
         </CardContent>
       </Card>

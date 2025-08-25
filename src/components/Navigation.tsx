@@ -50,7 +50,7 @@ export const Navigation = ({
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-terminal text-lg text-glow">CQLIntel</h1>
+            <h1 className="font-terminal text-lg text-glow">CQLForge</h1>
             <p className="text-xs text-muted-foreground">CTI → CQL</p>
           </div>
         </div>
