@@ -4,13 +4,17 @@ import { IOCExtractor } from '@/components/IOCExtractor';
 import { CQLGenerator } from '@/components/CQLGenerator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import ApiKeysDialog from '@/components/ApiKeysDialog';
+import { SettingsDialog } from '@/components/SettingsDialog';
+import { HelpDialog } from '@/components/HelpDialog';
 import { ExportDialog } from '@/components/ExportDialog';
 import { HuntSuggestions } from '@/components/HuntSuggestions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
-import { Clock, Shield, Zap } from 'lucide-react';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { analytics, trackUserAction } from '@/lib/analytics';
+import { Clock, Shield, Zap, Settings, HelpCircle } from 'lucide-react';
 
 const Index = () => {
   const [activeSection, setActiveSection] = useState('ingest');
@@ -24,8 +28,12 @@ const Index = () => {
     emails: []
   });
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [generatedQueries, setGeneratedQueries] = useState<any[]>([]);
+  
+  const { handleError } = useErrorHandler();
   
   // Phase 4: Enhanced state for TTP tracking
   const [extractedTTPs, setExtractedTTPs] = useState<any[]>([]);
@@ -35,8 +43,13 @@ const Index = () => {
   const counts = getIOCCounts(iocs);
 
   const handleApplyHunt = (template: string, huntId: string) => {
-    setGeneratedQueries(prev => [...prev, template]);
-    setActiveSection('queries');
+    try {
+      setGeneratedQueries(prev => [...prev, template]);
+      setActiveSection('queries');
+      trackUserAction('apply_hunt', 'HuntSuggestions', { huntId });
+    } catch (error) {
+      handleError(error, { component: 'Index', action: 'handleApplyHunt' });
+    }
   };
 
   const renderContent = () => {
@@ -136,6 +149,20 @@ const Index = () => {
               </div>
 
               <div>
+                <h3 className="text-sm font-medium mb-3">Application Settings</h3>
+                <div className="space-y-3">
+                  <Button variant="outline" className="gap-2" onClick={() => setSettingsDialogOpen(true)}>
+                    <Settings className="h-4 w-4" />
+                    Advanced Settings
+                  </Button>
+                  <Button variant="outline" className="gap-2" onClick={() => setHelpDialogOpen(true)}>
+                    <HelpCircle className="h-4 w-4" />
+                    Documentation
+                  </Button>
+                </div>
+              </div>
+
+              <div>
                 <h3 className="text-sm font-medium mb-3">Data Profiles</h3>
                 <div className="space-y-2">
                   <Badge variant="secondary">Default CrowdStrike</Badge>
@@ -187,6 +214,15 @@ const Index = () => {
                 <Clock className="h-4 w-4" />
                 <span>Last 24h</span>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setHelpDialogOpen(true)}
+                className="gap-2"
+              >
+                <HelpCircle className="h-4 w-4" />
+                Help
+              </Button>
               <ThemeToggle />
             </div>
           </div>
@@ -199,6 +235,8 @@ const Index = () => {
           </div>
         </main>
         <ApiKeysDialog open={apiDialogOpen} onOpenChange={setApiDialogOpen} />
+        <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
+        <HelpDialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen} />
         <ExportDialog 
           open={exportDialogOpen} 
           onOpenChange={setExportDialogOpen} 
