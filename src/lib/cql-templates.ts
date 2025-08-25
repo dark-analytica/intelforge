@@ -156,55 +156,6 @@ export const cqlTemplates: CQLTemplate[] = [
     repo: 'all'
   }
 ];
-    name: 'Domain Hunt (DNS/Proxy)',
-    description: 'Hunt for suspicious domains in DNS and proxy logs',
-    template: `{DNS_REPO} OR {PROXY_REPO}
-| ({DOMAIN_FIELD} =? "{DOMAIN}" OR regex(field={URL_FIELD}, pattern="/(^|\\.){DOMAIN_ESCAPED}$/"))
-| groupBy({HOST_FIELD}, function=count())
-| sort(_count, desc)`,
-    placeholders: ['DNS_REPO', 'PROXY_REPO', 'DOMAIN_FIELD', 'URL_FIELD', 'HOST_FIELD', 'DOMAIN', 'DOMAIN_ESCAPED'],
-    requiredIOCTypes: ['domains'],
-    repo: 'dns'
-  },
-  {
-    id: 'hash-edr-hunt',
-    name: 'File Hash Hunt (EDR)',
-    description: 'Hunt for malicious file hashes in endpoint data',
-    template: `{EDR_REPO}
-| in({SHA256_FIELD}, [{HASH_LIST}])
-| table({HOST_FIELD}, {USERNAME_FIELD}, {PROC_PATH_FIELD}, {SHA256_FIELD}, @timestamp)
-| sort(@timestamp, desc)`,
-    placeholders: ['EDR_REPO', 'SHA256_FIELD', 'HOST_FIELD', 'USERNAME_FIELD', 'PROC_PATH_FIELD', 'HASH_LIST'],
-    requiredIOCTypes: ['sha256', 'md5'],
-    repo: 'edr'
-  },
-  {
-    id: 'email-idp-hunt',
-    name: 'Email Hunt (Identity)',
-    description: 'Hunt for suspicious email addresses in identity provider logs',
-    template: `{IDP_REPO}
-| in({EMAIL_FIELD}, [{EMAIL_LIST}])
-| where {ACTION_FIELD} = "login"
-| groupBy({EMAIL_FIELD}, function=count())
-| sort(_count, desc)`,
-    placeholders: ['IDP_REPO', 'EMAIL_FIELD', 'ACTION_FIELD', 'EMAIL_LIST'],
-    requiredIOCTypes: ['emails'],
-    repo: 'idp'
-  },
-  {
-    id: 'ioc-enrichment',
-    name: 'IOC Enrichment Lookup',
-    description: 'Perform IOC enrichment across all data sources',
-    template: `#type=*
-| ioc:lookup(field={FIELD}, confidenceThreshold=high)
-| where ioc.match = true
-| table(ioc.type, ioc.indicator, {FIELD}, @timestamp)
-| sort(@timestamp, desc)`,
-    placeholders: ['FIELD'],
-    requiredIOCTypes: ['domains', 'ipv4', 'ipv6'],
-    repo: 'all'
-  }
-];
 
 export const renderTemplate = (
   template: CQLTemplate, 
