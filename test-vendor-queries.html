@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Vendor Query Test</title>
+</head>
+<body>
+    <h1>Multi-Vendor Query Generation Test</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        // Test the multi-vendor query generation
+        const testTemplate = {
+            id: 'ip-proxy-hunt',
+            name: 'IP Address Hunt (Proxy)',
+            description: 'Hunt for suspicious IP addresses in proxy logs',
+            template: `{PROXY_REPO}
+| in({DST_IP_FIELD}, [{IP_LIST}])
+| timechart(span=1h, by={DST_IP_FIELD})
+| sort(@timestamp, desc)`,
+            placeholders: ['PROXY_REPO', 'DST_IP_FIELD', 'IP_LIST'],
+            requiredIOCTypes: ['ipv4', 'ipv6'],
+            repo: 'proxy'
+        };
+
+        const testIOCs = {
+            ipv4: ['192.168.1.100', '10.0.0.50'],
+            ipv6: [],
+            domains: ['malicious.example.com'],
+            urls: [],
+            sha256: [],
+            md5: [],
+            emails: []
+        };
+
+        // Test vendors
+        const vendors = [
+            {
+                id: 'crowdstrike',
+                name: 'CrowdStrike LogScale',
+                module: {
+                    fields: { DST_IP_FIELD: 'aip', SRC_IP_FIELD: 'LocalIP' },
+                    repos: { PROXY_REPO: '#event.module=crowdstrike #event.category=network' }
+                }
+            },
+            {
+                id: 'splunk',
+                name: 'Splunk Enterprise',
+                module: {
+                    fields: { DST_IP_FIELD: 'dest_ip', SRC_IP_FIELD: 'src_ip' },
+                    repos: { PROXY_REPO: 'index=proxy' }
+                }
+            },
+            {
+                id: 'sentinel',
+                name: 'Microsoft Sentinel',
+                module: {
+                    fields: { DST_IP_FIELD: 'DstIpAddr', SRC_IP_FIELD: 'SrcIpAddr' },
+                    repos: { PROXY_REPO: 'CommonSecurityLog' }
+                }
+            }
+        ];
+
+        // Simple template rendering function
+        function renderTemplate(template, iocs, vendor) {
+            let rendered = template.template;
+            
+            // Replace repository placeholders
+            Object.entries(vendor.module.repos).forEach(([key, value]) => {
+                rendered = rendered.replace(new RegExp(`{${key}}`, 'g'), value);
+            });
+            
+            // Replace field placeholders
+            Object.entries(vendor.module.fields).forEach(([key, value]) => {
+                rendered = rendered.replace(new RegExp(`{${key}}`, 'g'), value);
+            });
+            
+            // Replace IOC placeholders
+            const ipList = [...(iocs.ipv4 || []), ...(iocs.ipv6 || [])].map(ip => `"${ip}"`).join(', ');
+            rendered = rendered.replace(/{IP_LIST}/g, ipList || '""');
+            
+            // Apply vendor-specific transformations
+            if (vendor.id === 'splunk') {
+                rendered = rendered.replace(/#event\.module=/g, 'index=');
+                rendered = rendered.replace(/\| in\(/g, '| search ');
+                rendered = rendered.replace(/\| timechart\(/g, '| timechart ');
+                rendered = rendered.replace(/@timestamp/g, '_time');
+            } else if (vendor.id === 'sentinel') {
+                rendered = rendered.replace(/#event\.module=\w+ #event\.category=\w+/g, vendor.module.repos.PROXY_REPO);
+                rendered = rendered.replace(/\| in\(/g, '| where ');
+                rendered = rendered.replace(/\| timechart\(/g, '| summarize count() by ');
+                rendered = rendered.replace(/@timestamp/g, 'TimeGenerated');
+                rendered = rendered.replace(/\| sort\(/g, '| order by ');
+            }
+            
+            return rendered;
+        }
+
+        const resultsDiv = document.getElementById('results');
+        
+        vendors.forEach(vendor => {
+            const query = renderTemplate(testTemplate, testIOCs, vendor);
+            
+            resultsDiv.innerHTML += `
+                <h2>${vendor.name}</h2>
+                <h3>Generated Query:</h3>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px;">${query}</pre>
+                <hr>
+            `;
+        });
+    </script>
+</body>
+</html>

@@ -28,7 +28,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Info className="h-5 w-5" />
-            CQLForge Documentation
+            IntelForge Documentation
           </DialogTitle>
         </DialogHeader>
 
@@ -48,7 +48,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                   Getting Started
                 </CardTitle>
                 <CardDescription>
-                  Transform threat intelligence into actionable CQL queries in 4 steps
+                  Transform threat intelligence into actionable SIEM queries in 4 steps
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -63,7 +63,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                         Extract IOCs
                       </h4>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Paste threat reports, paste IOCs, or upload PDF files. The system automatically extracts:
+                        Paste threat reports, upload PDFs, or fetch URLs. AI-powered extraction with smart filtering:
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
                         <Badge variant="outline">IP Addresses</Badge>
@@ -71,6 +71,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                         <Badge variant="outline">URLs</Badge>
                         <Badge variant="outline">File Hashes</Badge>
                         <Badge variant="outline">Email Addresses</Badge>
+                        <Badge variant="outline">TTPs</Badge>
                       </div>
                     </div>
                   </div>
@@ -82,17 +83,16 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                     <div className="flex-1">
                       <h4 className="font-semibold flex items-center gap-2">
                         <Code className="h-4 w-4" />
-                        Generate CQL Queries
+                        Generate SIEM Queries
                       </h4>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Select your SIEM vendor and automatically generate optimized CQL queries with proper field mappings.
+                        Select your SIEM vendor and automatically generate optimized queries with proper field mappings and syntax.
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <Badge variant="outline">CrowdStrike</Badge>
-                        <Badge variant="outline">Splunk</Badge>
-                        <Badge variant="outline">QRadar</Badge>
-                        <Badge variant="outline">Sentinel</Badge>
-                        <Badge variant="outline">Elastic</Badge>
+                        <Badge variant="outline">CrowdStrike LogScale</Badge>
+                        <Badge variant="outline">Splunk SPL</Badge>
+                        <Badge variant="outline">Microsoft Sentinel KQL</Badge>
+                        <Badge variant="outline">More Coming Soon</Badge>
                       </div>
                     </div>
                   </div>
@@ -125,7 +125,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                         Export your analysis in multiple formats for integration with your security workflow.
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <Badge variant="outline">CQL Queries</Badge>
+                        <Badge variant="outline">SIEM Queries</Badge>
                         <Badge variant="outline">CSV Reports</Badge>
                         <Badge variant="outline">STIX 2.1</Badge>
                         <Badge variant="outline">JSON</Badge>
@@ -155,7 +155,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                     <CheckCircle className="h-5 w-5 text-primary mt-0.5" />
                     <div>
                       <p className="font-medium">AI-Powered Analysis</p>
-                      <p className="text-sm text-muted-foreground">Automatic TTP extraction and MITRE ATT&CK mapping</p>
+                      <p className="text-sm text-muted-foreground">TTP extraction, URL threat assessment, and smart IOC filtering</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -199,21 +199,35 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Hunt Suggestions</CardTitle>
+                  <CardTitle>Hunt Suggestions & MITRE ATT&CK</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-start gap-3">
                     <CheckCircle className="h-5 w-5 text-primary mt-0.5" />
                     <div>
-                      <p className="font-medium">MITRE ATT&CK Integration</p>
-                      <p className="text-sm text-muted-foreground">Hunt templates mapped to tactics and techniques</p>
+                      <p className="font-medium">Comprehensive MITRE Integration</p>
+                      <p className="text-sm text-muted-foreground">20+ techniques with full metadata, tactics, and detection methods</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <CheckCircle className="h-5 w-5 text-primary mt-0.5" />
                     <div>
-                      <p className="font-medium">Contextualized Recommendations</p>
-                      <p className="text-sm text-muted-foreground">Suggestions based on your specific IOCs and TTPs</p>
+                      <p className="font-medium">Advanced Hunt Templates</p>
+                      <p className="text-sm text-muted-foreground">PowerShell analysis, process injection, C2 detection, and multi-IOC correlation</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-5 w-5 text-primary mt-0.5" />
+                    <div>
+                      <p className="font-medium">Pyramid of Pain Framework</p>
+                      <p className="text-sm text-muted-foreground">TTP-based hunts prioritized for maximum adversary disruption</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-5 w-5 text-primary mt-0.5" />
+                    <div>
+                      <p className="font-medium">Dynamic Template Generation</p>
+                      <p className="text-sm text-muted-foreground">Automatic hunt creation for missing scenarios with intelligent fallbacks</p>
                     </div>
                   </div>
                 </CardContent>
@@ -265,10 +279,23 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                   <Separator />
 
                   <div className="space-y-2">
-                    <p className="font-medium">AI features not available</p>
+                    <p className="font-medium">URL fetching blocked or failing</p>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• Configure a CORS proxy URL in Settings for URL fetching</li>
+                      <li>• Some websites block automated requests - this is normal</li>
+                      <li>• Try copying the content manually if URL fetch fails</li>
+                      <li>• Use HTTPS URLs when possible for better compatibility</li>
+                    </ul>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <p className="font-medium">AI features not available or "Failed to fetch" errors</p>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• <strong>Recommended:</strong> Use OpenRouter API key from openrouter.ai (works best in browsers)</li>
                       <li>• Configure API keys in Settings → Configure API Keys</li>
-                      <li>• Ensure you have a valid OpenAI, Anthropic, or other supported API key</li>
+                      <li>• Direct API calls may be blocked by CORS - OpenRouter solves this</li>
                       <li>• Check your API key usage limits and billing status</li>
                     </ul>
                   </div>
@@ -305,7 +332,7 @@ export const HelpDialog = ({ open, onOpenChange }: HelpDialogProps) => {
                   Security & Privacy
                 </CardTitle>
                 <CardDescription>
-                  CQLForge is designed with security and privacy in mind
+                  IntelForge is designed with security and privacy in mind
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

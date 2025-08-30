@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IOC Extraction and Query Generation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>IOC Extraction and Query Generation Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Input</h2>
+        <textarea id="testInput" rows="10" cols="80">
+Threat Report: APT29 Campaign Analysis
+
+The following indicators were observed during the investigation:
+
+IP Addresses:
+- 192.168.1.100 (internal network)
+- 203.0.113.45 (external C2 server)
+- 198.51.100.23 (malicious infrastructure)
+
+Domains:
+- malicious-domain.example.com
+- c2-server.badactor.net
+- legitimate-site.com (false positive)
+
+URLs:
+- http://malicious-domain.example.com/payload.exe
+- https://c2-server.badactor.net/beacon
+
+File Hashes:
+- SHA256: a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
+- MD5: 5d41402abc4b2a76b9719d911017c592
+
+Email Addresses:
+- attacker@malicious-domain.example.com
+- admin@legitimate-site.com
+        </textarea>
+        <br><br>
+        <button onclick="runTest()">Run IOC Extraction Test</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Extraction Results</h2>
+        <div id="extractionResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Query Generation Results</h2>
+        <div id="queryResults"></div>
+    </div>
+
+    <script>
+        // Mock IOC extraction function
+        function extractIOCs(text) {
+            const patterns = {
+                ipv4: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g,
+                domain: /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b/g,
+                url: /https?:\/\/(?:[-\w.])+(?:[:\d]+)?(?:\/(?:[\w._~!$&'()*+,;=:@%-]|%[0-9A-Fa-f]{2})*)*(?:\?(?:[\w._~!$&'()*+,;=:@%-]|%[0-9A-Fa-f]{2})*)?(?:#(?:[\w._~!$&'()*+,;=:@%-]|%[0-9A-Fa-f]{2})*)?/g,
+                sha256: /\b[a-fA-F0-9]{64}\b/g,
+                md5: /\b[a-fA-F0-9]{32}\b/g,
+                email: /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g
+            };
+
+            const iocs = {
+                ipv4: [...new Set((text.match(patterns.ipv4) || []))],
+                ipv6: [],
+                domains: [...new Set((text.match(patterns.domain) || []).filter(d => !d.match(/\d+\.\d+\.\d+\.\d+/)))],
+                urls: [...new Set((text.match(patterns.url) || []))],
+                sha256: [...new Set((text.match(patterns.sha256) || []))],
+                md5: [...new Set((text.match(patterns.md5) || []))],
+                emails: [...new Set((text.match(patterns.email) || []))]
+            };
+
+            // Filter out private IPs
+            iocs.ipv4 = iocs.ipv4.filter(ip => !ip.match(/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/));
+
+            return iocs;
+        }
+
+        // Mock query generation function
+        function generateQuery(template, iocs, vendor) {
+            let query = template;
+            
+            // Replace IOC placeholders
+            const ipList = iocs.ipv4.map(ip => `"${ip}"`).join(', ');
+            const domainList = iocs.domains.map(d => `"${d}"`).join(', ');
+            const hashList = [...iocs.sha256, ...iocs.md5].map(h => `"${h}"`).join(', ');
+            
+            query = query.replace(/{IP_LIST}/g, ipList);
+            query = query.replace(/{DOMAIN_LIST}/g, domainList);
+            query = query.replace(/{HASH_LIST}/g, hashList);
+            
+            // Apply vendor-specific transformations
+            if (vendor === 'splunk') {
+                query = query.replace(/#type=/g, 'index=');
+                query = query.replace(/\| in\(/g, '| search ');
+                query = query.replace(/@timestamp/g, '_time');
+                query = query.replace(/{PROXY_REPO}/g, 'index=proxy');
+                query = query.replace(/{DST_IP_FIELD}/g, 'dest_ip');
+            } else if (vendor === 'sentinel') {
+                query = query.replace(/#type=\w+/g, 'CommonSecurityLog');
+                query = query.replace(/\| in\(/g, '| where ');
+                query = query.replace(/@timestamp/g, 'TimeGenerated');
+                query = query.replace(/{PROXY_REPO}/g, 'CommonSecurityLog');
+                query = query.replace(/{DST_IP_FIELD}/g, 'DstIpAddr');
+            } else {
+                // CrowdStrike/LogScale (default)
+                query = query.replace(/{PROXY_REPO}/g, '#type=proxy');
+                query = query.replace(/{DST_IP_FIELD}/g, 'dst_ip');
+            }
+            
+            return query;
+        }
+
+        function runTest() {
+            const text = document.getElementById('testInput').value;
+            const extractionDiv = document.getElementById('extractionResults');
+            const queryDiv = document.getElementById('queryResults');
+            
+            try {
+                // Test IOC extraction
+                const iocs = extractIOCs(text);
+                const totalIOCs = Object.values(iocs).reduce((sum, arr) => sum + arr.length, 0);
+                
+                extractionDiv.innerHTML = `
+                    <div class="result success">
+                        <h3>IOC Extraction Successful</h3>
+                        <p><strong>Total IOCs extracted:</strong> ${totalIOCs}</p>
+                        <ul>
+                            <li><strong>IPv4:</strong> ${iocs.ipv4.length} (${iocs.ipv4.join(', ')})</li>
+                            <li><strong>Domains:</strong> ${iocs.domains.length} (${iocs.domains.join(', ')})</li>
+                            <li><strong>URLs:</strong> ${iocs.urls.length} (${iocs.urls.join(', ')})</li>
+                            <li><strong>SHA256:</strong> ${iocs.sha256.length} (${iocs.sha256.join(', ')})</li>
+                            <li><strong>MD5:</strong> ${iocs.md5.length} (${iocs.md5.join(', ')})</li>
+                            <li><strong>Emails:</strong> ${iocs.emails.length} (${iocs.emails.join(', ')})</li>
+                        </ul>
+                    </div>
+                `;
+
+                // Test query generation for different vendors
+                const template = `{PROXY_REPO}
+| in({DST_IP_FIELD}, [{IP_LIST}])
+| timechart(span=1h, by={DST_IP_FIELD})
+| sort(@timestamp, desc)`;
+
+                const vendors = [
+                    { id: 'crowdstrike', name: 'CrowdStrike LogScale (CQL)' },
+                    { id: 'splunk', name: 'Splunk Enterprise (SPL)' },
+                    { id: 'sentinel', name: 'Microsoft Sentinel (KQL)' }
+                ];
+
+                let queryHTML = '<div class="result success"><h3>Query Generation Successful</h3>';
+                
+                vendors.forEach(vendor => {
+                    const query = generateQuery(template, iocs, vendor.id);
+                    queryHTML += `
+                        <h4>${vendor.name}</h4>
+                        <pre>${query}</pre>
+                        <hr>
+                    `;
+                });
+                
+                queryHTML += '</div>';
+                queryDiv.innerHTML = queryHTML;
+
+            } catch (error) {
+                extractionDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>Test Failed</h3>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

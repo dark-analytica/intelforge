@@ -407,9 +407,23 @@ export const cqlTemplates: CQLTemplate[] = [
 export const renderTemplate = (
   template: CQLTemplate, 
   iocs: Record<IOCType, string[]>,
-  profile: DataProfile = defaultProfile
+  profile: DataProfile = defaultProfile,
+  vendorId?: string
 ): string => {
   let rendered = template.template;
+  
+  // Apply vendor-specific syntax transformations
+  if (vendorId === 'splunk') {
+    rendered = transformToSPL(rendered, template, iocs, profile);
+  } else if (vendorId === 'sentinel') {
+    rendered = transformToKQL(rendered, template, iocs, profile);
+  } else if (vendorId === 'elastic') {
+    rendered = transformToESQL(rendered, template, iocs, profile);
+  } else if (vendorId === 'qradar') {
+    rendered = transformToAQL(rendered, template, iocs, profile);
+  } else if (vendorId === 'chronicle') {
+    rendered = transformToUDM(rendered, template, iocs, profile);
+  }
   
   // Replace repository placeholders
   Object.entries(profile.repos).forEach(([key, value]) => {
@@ -526,7 +540,188 @@ export const renderTemplateWithVendor = (
     warnings.push(`Missing field mappings: ${missingFields.join(', ')}`);
   }
 
-  const query = renderTemplate(template, iocs, vendorProfile);
+  const query = renderTemplate(template, iocs, vendorProfile, vendorId);
   
   return { query, profile: vendorProfile, warnings };
+};
+
+// SPL (Splunk) syntax transformation
+const transformToSPL = (
+  template: string, 
+  templateObj: CQLTemplate, 
+  iocs: Record<IOCType, string[]>, 
+  profile: DataProfile
+): string => {
+  let splQuery = template;
+  
+  // Transform CQL syntax to SPL syntax
+  // Replace CQL operators with SPL equivalents
+  splQuery = splQuery.replace(/#type=/g, 'index=');
+  splQuery = splQuery.replace(/\| in\([^)]+\)/g, (match) => {
+    const content = match.replace(/\| in\(/, '').replace(/\)$/, '');
+    return `| search ${content}`;
+  });
+  splQuery = splQuery.replace(/\| stats count\(\)/g, '| stats count');
+  splQuery = splQuery.replace(/\| sort\s*\(/g, '| sort ');
+  splQuery = splQuery.replace(/\| sort\s+([^|]+)/g, '| sort $1');
+  splQuery = splQuery.replace(/\| where /g, '| search ');
+  splQuery = splQuery.replace(/\| timechart\(/g, '| timechart ');
+  splQuery = splQuery.replace(/\| groupBy\(/g, '| stats count by ');
+  
+  // Transform time syntax
+  splQuery = splQuery.replace(/now\(\)-(\d+)d/g, '-$1d@d');
+  splQuery = splQuery.replace(/now\(\)-(\d+)h/g, '-$1h@h');
+  splQuery = splQuery.replace(/@timestamp/g, '_time');
+  
+  // Transform field syntax for SPL
+  splQuery = splQuery.replace(/AND /g, ' AND ');
+  splQuery = splQuery.replace(/OR /g, ' OR ');
+  
+  return splQuery;
+};
+
+// KQL (Microsoft Sentinel) syntax transformation  
+const transformToKQL = (
+  template: string,
+  templateObj: CQLTemplate,
+  iocs: Record<IOCType, string[]>,
+  profile: DataProfile
+): string => {
+  let kqlQuery = template;
+  
+  // Transform CQL syntax to KQL syntax
+  // Replace repository syntax
+  kqlQuery = kqlQuery.replace(/#type=(\w+)/g, '$1');
+  kqlQuery = kqlQuery.replace(/index=(\w+)/g, '$1');
+  
+  // Transform operators
+  kqlQuery = kqlQuery.replace(/\| in\([^)]+\)/g, (match) => {
+    const content = match.replace(/\| in\(/, '').replace(/\)$/, '');
+    return `| where ${content}`;
+  });
+  kqlQuery = kqlQuery.replace(/\| stats count\(\)/g, '| summarize count()');
+  kqlQuery = kqlQuery.replace(/\| sort\s*\(/g, '| order by ');
+  kqlQuery = kqlQuery.replace(/\| sort\s+([^|]+)/g, '| order by $1');
+  
+  // Transform aggregation functions
+  kqlQuery = kqlQuery.replace(/dc\(/g, 'dcount(');
+  kqlQuery = kqlQuery.replace(/values\(/g, 'make_set(');
+  
+  // Transform time syntax
+  kqlQuery = kqlQuery.replace(/now\(\)-(\d+)d/g, 'ago($1d)');
+  kqlQuery = kqlQuery.replace(/now\(\)-(\d+)h/g, 'ago($1h)');
+  kqlQuery = kqlQuery.replace(/@timestamp/g, 'TimeGenerated');
+  
+  // Transform field comparisons (be careful not to replace == that are already correct)
+  kqlQuery = kqlQuery.replace(/([^=!])=([^=])/g, '$1 == $2');
+  kqlQuery = kqlQuery.replace(/!=/g, ' != ');
+  
+  return kqlQuery;
+};
+
+// ES|QL (Elasticsearch) syntax transformation
+const transformToESQL = (
+  template: string,
+  templateObj: CQLTemplate,
+  iocs: Record<IOCType, string[]>,
+  profile: DataProfile
+): string => {
+  let esqlQuery = template;
+  
+  // Transform CQL syntax to ES|QL syntax
+  // Replace repository syntax
+  esqlQuery = esqlQuery.replace(/#type=(\w+)/g, 'FROM logs-$1-*');
+  esqlQuery = esqlQuery.replace(/index=(\w+)/g, 'FROM logs-$1-*');
+  
+  // Transform operators
+  esqlQuery = esqlQuery.replace(/\| in\([^)]+\)/g, (match) => {
+    const content = match.replace(/\| in\(/, '').replace(/\)$/, '');
+    return `| WHERE ${content}`;
+  });
+  esqlQuery = esqlQuery.replace(/\| stats count\(\)/g, '| STATS count = COUNT(*)');
+  esqlQuery = esqlQuery.replace(/\| sort\s*\(/g, '| SORT ');
+  esqlQuery = esqlQuery.replace(/\| sort\s+([^|]+)/g, '| SORT $1');
+  esqlQuery = esqlQuery.replace(/\| where /g, '| WHERE ');
+  
+  // Transform aggregation functions
+  esqlQuery = esqlQuery.replace(/dc\(/g, 'COUNT_DISTINCT(');
+  esqlQuery = esqlQuery.replace(/values\(/g, 'VALUES(');
+  
+  // Transform time syntax
+  esqlQuery = esqlQuery.replace(/now\(\)-(\d+)d/g, 'NOW() - INTERVAL $1 DAY');
+  esqlQuery = esqlQuery.replace(/now\(\)-(\d+)h/g, 'NOW() - INTERVAL $1 HOUR');
+  esqlQuery = esqlQuery.replace(/@timestamp/g, '@timestamp');
+  
+  return esqlQuery;
+};
+
+// AQL (IBM QRadar) syntax transformation
+const transformToAQL = (
+  template: string,
+  templateObj: CQLTemplate,
+  iocs: Record<IOCType, string[]>,
+  profile: DataProfile
+): string => {
+  let aqlQuery = template;
+  
+  // Transform CQL syntax to AQL syntax
+  // Replace repository syntax with category filters
+  aqlQuery = aqlQuery.replace(/#type=proxy/g, 'category = 6');
+  aqlQuery = aqlQuery.replace(/#type=dns/g, 'category = 15');
+  aqlQuery = aqlQuery.replace(/#type=edr/g, 'category = 4');
+  
+  // Transform operators
+  aqlQuery = aqlQuery.replace(/\| in\([^)]+\)/g, (match) => {
+    const content = match.replace(/\| in\(/, '').replace(/\)$/, '');
+    return `AND ${content}`;
+  });
+  aqlQuery = aqlQuery.replace(/\| stats count\(\)/g, 'GROUP BY');
+  aqlQuery = aqlQuery.replace(/\| sort\s*\(/g, 'ORDER BY ');
+  aqlQuery = aqlQuery.replace(/\| sort\s+([^|]+)/g, 'ORDER BY $1');
+  aqlQuery = aqlQuery.replace(/\| where /g, 'AND ');
+  
+  // Transform time syntax
+  aqlQuery = aqlQuery.replace(/now\(\)-(\d+)d/g, 'LAST $1 DAYS');
+  aqlQuery = aqlQuery.replace(/now\(\)-(\d+)h/g, 'LAST $1 HOURS');
+  aqlQuery = aqlQuery.replace(/@timestamp/g, 'starttime');
+  
+  // Wrap in SELECT statement if not already present
+  if (!aqlQuery.includes('SELECT')) {
+    aqlQuery = `SELECT * FROM events WHERE ${aqlQuery}`;
+  }
+  
+  return aqlQuery;
+};
+
+// UDM (Google Chronicle) syntax transformation
+const transformToUDM = (
+  template: string,
+  templateObj: CQLTemplate,
+  iocs: Record<IOCType, string[]>,
+  profile: DataProfile
+): string => {
+  let udmQuery = template;
+  
+  // Transform CQL syntax to UDM syntax
+  // Replace repository syntax with event type filters
+  udmQuery = udmQuery.replace(/#type=proxy/g, 'metadata.event_type = "NETWORK_HTTP"');
+  udmQuery = udmQuery.replace(/#type=dns/g, 'metadata.event_type = "NETWORK_DNS"');
+  udmQuery = udmQuery.replace(/#type=edr/g, 'metadata.event_type = "PROCESS_LAUNCH"');
+  
+  // Transform operators
+  udmQuery = udmQuery.replace(/\| in\([^)]+\)/g, (match) => {
+    const content = match.replace(/\| in\(/, '').replace(/\)$/, '');
+    return `AND ${content}`;
+  });
+  udmQuery = udmQuery.replace(/\| stats count\(\)/g, '');
+  udmQuery = udmQuery.replace(/\| sort\s*\(/g, '');
+  udmQuery = udmQuery.replace(/\| sort\s+([^|]+)/g, '');
+  udmQuery = udmQuery.replace(/\| where /g, 'AND ');
+  
+  // Transform time syntax
+  udmQuery = udmQuery.replace(/now\(\)-(\d+)d/g, '$1d');
+  udmQuery = udmQuery.replace(/now\(\)-(\d+)h/g, '$1h');
+  udmQuery = udmQuery.replace(/@timestamp/g, 'metadata.event_timestamp');
+  
+  return udmQuery;
 };

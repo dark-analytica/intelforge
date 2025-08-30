@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Eye, EyeOff, Key, Shield, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { secureStorage } from '@/lib/secure-storage';
 
 interface ApiKeysDialogProps {
   open: boolean;
@@ -11,10 +14,10 @@ interface ApiKeysDialogProps {
 }
 
 const storageKeys = {
-  openai: 'cqlforge_openai_key',
-  anthropic: 'cqlforge_anthropic_key',
-  gemini: 'cqlforge_gemini_key',
-  openrouter: 'cqlforge_openrouter_key',
+  openai: 'openai_key',
+  anthropic: 'anthropic_key',
+  gemini: 'gemini_key',
+  openrouter: 'openrouter_key',
   proxy: 'cqlforge_proxy_url'
 };
 
@@ -27,29 +30,49 @@ export const ApiKeysDialog = ({ open, onOpenChange }: ApiKeysDialogProps) => {
   const [proxy, setProxy] = useState('');
 
   useEffect(() => {
+    // Load existing keys on mount using secure storage
+    const loadKeys = async () => {
+      try {
+        setOpenai(await secureStorage.decryptAndRetrieve(storageKeys.openai));
+        setAnthropic(await secureStorage.decryptAndRetrieve(storageKeys.anthropic));
+        setGemini(await secureStorage.decryptAndRetrieve(storageKeys.gemini));
+        setOpenrouter(await secureStorage.decryptAndRetrieve(storageKeys.openrouter));
+        setProxy(localStorage.getItem(storageKeys.proxy) || ''); // Proxy URL doesn't need encryption
+      } catch (error) {
+        console.error('Failed to load API keys:', error);
+      }
+    };
+    
     if (open) {
-      setOpenai(localStorage.getItem(storageKeys.openai) || '');
-      setAnthropic(localStorage.getItem(storageKeys.anthropic) || '');
-      setGemini(localStorage.getItem(storageKeys.gemini) || '');
-      setOpenrouter(localStorage.getItem(storageKeys.openrouter) || '');
-      setProxy(localStorage.getItem(storageKeys.proxy) || '');
+      loadKeys();
     }
   }, [open]);
 
-  const handleSave = () => {
-    localStorage.setItem(storageKeys.openai, openai.trim());
-    localStorage.setItem(storageKeys.anthropic, anthropic.trim());
-    localStorage.setItem(storageKeys.gemini, gemini.trim());
-    localStorage.setItem(storageKeys.openrouter, openrouter.trim());
-    localStorage.setItem(storageKeys.proxy, proxy.trim());
-    toast({ title: 'Saved', description: 'API keys and proxy URL saved locally.' });
-    onOpenChange(false);
+  const handleSave = async () => {
+    try {
+      await secureStorage.encryptAndStore(storageKeys.openai, openai.trim());
+      await secureStorage.encryptAndStore(storageKeys.anthropic, anthropic.trim());
+      await secureStorage.encryptAndStore(storageKeys.gemini, gemini.trim());
+      await secureStorage.encryptAndStore(storageKeys.openrouter, openrouter.trim());
+      localStorage.setItem(storageKeys.proxy, proxy.trim()); // Proxy URL doesn't need encryption
+      toast({ title: 'Saved', description: 'API keys securely saved with encryption.' });
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to save API keys:', error);
+      toast({ title: 'Error', description: 'Failed to save API keys. Please try again.', variant: 'destructive' });
+    }
   };
 
-  const handleClear = () => {
-    Object.values(storageKeys).forEach((k) => localStorage.removeItem(k));
-    setOpenai(''); setAnthropic(''); setGemini(''); setOpenrouter(''); setProxy('');
-    toast({ title: 'Cleared', description: 'All keys removed from this browser.' });
+  const handleClear = async () => {
+    try {
+      await secureStorage.clearAll();
+      localStorage.removeItem(storageKeys.proxy);
+      setOpenai(''); setAnthropic(''); setGemini(''); setOpenrouter(''); setProxy('');
+      toast({ title: 'Cleared', description: 'All keys securely removed from this browser.' });
+    } catch (error) {
+      console.error('Failed to clear API keys:', error);
+      toast({ title: 'Error', description: 'Failed to clear API keys. Please try again.', variant: 'destructive' });
+    }
   };
 
   return (

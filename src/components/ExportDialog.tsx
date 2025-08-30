@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, Copy } from 'lucide-react';
 import { IOCSet } from '@/lib/ioc-extractor';
-import { exportToCQL, exportToCSV, exportToSTIX, exportToJSON, exportToMitreNavigator, downloadFile } from '@/lib/exporters';
+import { exportToQueries, exportToCQL, exportToCSV, exportToSTIX, exportToJSON, exportToMitreNavigator, downloadFile } from '@/lib/exporters';
 import { useToast } from '@/hooks/use-toast';
 
 interface ExportDialogProps {
@@ -55,9 +55,9 @@ export const ExportDialog = ({
 
   // Enhanced export content with TTP and detection context
   const createEnhancedCQL = () => {
-    if (queries.length === 0) return 'No CQL queries available for export';
+    if (queries.length === 0) return 'No queries available for export';
     
-    let content = `-- CQL Query Bundle with AI Analysis
+    let content = `-- Multi-Vendor Query Bundle with AI Analysis
 -- Generated: ${new Date().toISOString()}
 -- Total Queries: ${queries.length}
 -- TTPs Identified: ${ttps.length}
@@ -68,18 +68,17 @@ export const ExportDialog = ({
 `;
 
     queries.forEach((query, index) => {
-      const relatedTTPs = ttps.filter(ttp => 
-        query.template && ttp.behavior && 
-        ttp.behavior.toLowerCase().includes(query.template.toLowerCase().split(' ')[0])
-      );
+      const queryText = typeof query === 'string' ? query : query.query || query.cql || '';
+      const vendor = query.vendor || 'Unknown';
+      const module = query.module || 'Unknown';
       
-      content += `-- Query ${index + 1}: ${query.template || 'Untitled Query'}
--- Vendor: ${query.vendor || 'Unknown'} (${query.module || 'Unknown'})
--- Status: ${query.validation?.valid ? 'VALID' : 'NEEDS_REVIEW'}
-${relatedTTPs.length > 0 ? `-- Related TTPs: ${relatedTTPs.map(t => t.technique_id).join(', ')}\n` : ''}
-${query.cql || query}
-
-`;
+      // Determine query language based on vendor
+      let language = 'CQL';
+      if (vendor === 'splunk') language = 'SPL';
+      else if (vendor === 'sentinel') language = 'KQL';
+      else if (vendor === 'crowdstrike' || vendor === 'logscale') language = 'CQL';
+      
+      content += `-- Query ${index + 1} (${language} - ${vendor}/${module})\n${queryText}\n\n`;
     });
     
     return content;

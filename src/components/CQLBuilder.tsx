@@ -10,15 +10,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Bot, Copy, Sparkles, BookOpen, Code, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { vendors, getVendorById, getModuleById, validateFieldMapping } from '@/lib/vendors';
+import { llmService } from '@/lib/llm-service';
 
-interface CQLBuilderProps {}
+interface QueryBuilderProps {}
 
-export const CQLBuilder = ({}: CQLBuilderProps) => {
+export const QueryBuilder = ({}: QueryBuilderProps) => {
   const [query, setQuery] = useState('');
   const [userInput, setUserInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-5-2025-08-07');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [selectedModule, setSelectedModule] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -27,13 +27,23 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
   const { toast } = useToast();
 
   const modelOptions = [
-    { value: 'gpt-5-2025-08-07', label: 'GPT-5 (2025-08-07)', description: 'Latest flagship model' },
-    { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini (2025-08-07)', description: 'Fast & efficient' },
-    { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano (2025-08-07)', description: 'Fastest model' },
-    { value: 'gpt-4.1-2025-04-14', label: 'GPT-4.1 (2025-04-14)', description: 'Reliable flagship' },
-    { value: 'o3-2025-04-16', label: 'O3 (2025-04-16)', description: 'Advanced reasoning' },
-    { value: 'o4-mini-2025-04-16', label: 'O4 Mini (2025-04-16)', description: 'Fast reasoning' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Legacy fast model' }
+    // OpenAI Models
+    { value: 'gpt-4o', label: 'GPT-4o', description: 'Latest OpenAI flagship model', provider: 'openai' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Fast & cost-effective OpenAI model', provider: 'openai' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', description: 'Advanced OpenAI model', provider: 'openai' },
+    
+    // Anthropic Models
+    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', description: 'Latest Anthropic flagship model', provider: 'anthropic' },
+    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', description: 'Fast Anthropic model', provider: 'anthropic' },
+    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', description: 'Most capable Anthropic model', provider: 'anthropic' },
+    
+    // Google Models
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'Google flagship model', provider: 'gemini' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Fast Google model', provider: 'gemini' },
+    
+    // OpenRouter Models
+    { value: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku (OpenRouter)', description: 'Via OpenRouter', provider: 'openrouter' },
+    { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenRouter)', description: 'Via OpenRouter', provider: 'openrouter' }
   ];
 
   const examplePrompts = [
@@ -70,40 +80,44 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
       return;
     }
 
+    if (!llmService.hasConfiguredProviders()) {
+      toast({
+        title: "No API Keys",
+        description: "Please configure API keys in Settings to use AI features.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('generate-cql', {
-        body: {
-          description: userInput,
-          model: selectedModel,
-          context: "CrowdStrike Falcon LogScale (Humio) environment",
-          vendor: selectedVendor || undefined,
-          module: selectedModule || undefined
-        }
+      // Try client-side LLM service first
+      const response = await llmService.generateCQL({
+        systemPrompt: '', // Will be set by the service
+        userPrompt: userInput,
+        preferredModel: selectedModel,
+        maxTokens: 4000,
+        temperature: 0.1
       });
 
-      if (functionError) {
-        throw new Error(functionError.message);
-      }
-
-      if (data?.query) {
-        setQuery(data.query);
-        validateQuery(data.query);
+      if (response?.content) {
+        setQuery(response.content);
+        validateQuery(response.content);
         toast({
           title: "Query Generated",
-          description: `CQL query generated using ${data.model_used || selectedModel}`
+          description: `CQL query generated using ${response.provider} (${response.model})`
         });
       } else {
         throw new Error('No query received from the generator');
       }
-    } catch (err) {
-      console.error('CQL generation error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate CQL query');
+    } catch (clientError) {
+      console.error('CQL generation failed:', clientError);
+      setError(`Failed to generate query: ${clientError.message}`);
       toast({
         title: "Generation Failed",
-        description: "Failed to generate CQL query. Please try again.",
+        description: "Unable to generate CQL query. Please check your API keys in Settings.",
         variant: "destructive"
       });
     } finally {
@@ -141,9 +155,9 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
           <Bot className="h-4 w-4 text-primary-foreground" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">CQL Query Builder</h2>
+          <h2 className="text-xl font-semibold">Query Builder</h2>
           <p className="text-sm text-muted-foreground">
-            Generate CQL queries using natural language with AI assistance
+            Interactive query builder using natural language with AI assistance
           </p>
         </div>
       </div>
@@ -216,7 +230,10 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
                   {modelOptions.map((model) => (
                     <SelectItem key={model.value} value={model.value}>
                       <div className="flex flex-col">
-                        <span>{model.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span>{model.label}</span>
+                          <Badge variant="secondary" className="text-xs">{model.provider}</Badge>
+                        </div>
                         <span className="text-xs text-muted-foreground">{model.description}</span>
                       </div>
                     </SelectItem>
@@ -277,13 +294,13 @@ export const CQLBuilder = ({}: CQLBuilderProps) => {
               Generated Query
             </CardTitle>
             <CardDescription>
-              Ready-to-use CQL query for LogScale/Humio
+              AI-generated query for your selected SIEM platform
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>CQL Query</Label>
+                <Label>Query</Label>
                 {query && (
                   <Button
                     variant="outline"

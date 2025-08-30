@@ -31,7 +31,7 @@ export const VendorPicker = ({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         <div>
           <label className="text-sm font-medium mb-2 block">Vendor</label>
           <Select value={selectedVendor} onValueChange={onVendorChange}>
@@ -65,14 +65,14 @@ export const VendorPicker = ({
         </div>
 
         <div>
-          <label className="text-sm font-medium mb-2 block">Module</label>
+          <label className="text-sm font-medium mb-2 block">Data Source</label>
           <Select 
             value={selectedModule} 
             onValueChange={onModuleChange}
             disabled={!selectedVendor}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select module..." />
+              <SelectValue placeholder="Select data source..." />
             </SelectTrigger>
             <SelectContent>
               {selectedVendorObj?.modules.map((module) => (
@@ -91,24 +91,43 @@ export const VendorPicker = ({
       {selectedModuleObj && (
         <div className="space-y-4">
           <div>
-            <h4 className="font-medium mb-2">Field Mappings</h4>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(selectedModuleObj.fields).map(([key, value]) => (
-                <Badge key={key} variant="secondary" className="text-xs">
-                  {key}: {value}
-                </Badge>
-              ))}
+            <h4 className="font-medium mb-2">Query Language & Syntax</h4>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {selectedVendorObj.id === 'crowdstrike' && <Badge variant="default">CQL</Badge>}
+              {selectedVendorObj.id === 'logscale' && <Badge variant="default">CQL</Badge>}
+              {selectedVendorObj.id === 'splunk' && <Badge variant="default">SPL</Badge>}
+              {selectedVendorObj.id === 'sentinel' && <Badge variant="default">KQL</Badge>}
+              {selectedVendorObj.id === 'custom' && <Badge variant="outline">Custom</Badge>}
             </div>
           </div>
 
           <div>
-            <h4 className="font-medium mb-2">Repository Mappings</h4>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(selectedModuleObj.repos).map(([key, value]) => (
-                <Badge key={key} variant="outline" className="text-xs font-mono">
-                  {key}: {value}
-                </Badge>
-              ))}
+            <h4 className="font-medium mb-2">Key Field Mappings</h4>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">IP:</span>
+                <span className="font-mono">{selectedModuleObj.fields.SRC_IP_FIELD}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Domain:</span>
+                <span className="font-mono">{selectedModuleObj.fields.DOMAIN_FIELD}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Host:</span>
+                <span className="font-mono">{selectedModuleObj.fields.HOST_FIELD}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">User:</span>
+                <span className="font-mono">{selectedModuleObj.fields.USERNAME_FIELD}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Hash:</span>
+                <span className="font-mono">{selectedModuleObj.fields.SHA256_FIELD}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Action:</span>
+                <span className="font-mono">{selectedModuleObj.fields.ACTION_FIELD}</span>
+              </div>
             </div>
           </div>
 

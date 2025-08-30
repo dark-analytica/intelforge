@@ -19,11 +19,14 @@ class AnalyticsService {
   private events: AnalyticsEvent[] = [];
   private sessionStart: number;
   private isEnabled: boolean = false;
+  private cleanupInterval: number | null = null;
+  private beforeUnloadHandler: (() => void) | null = null;
 
   constructor() {
     this.sessionStart = Date.now();
     this.loadSettings();
     this.setupBeforeUnload();
+    this.setupPeriodicCleanup();
   }
 
   private loadSettings() {
@@ -39,9 +42,51 @@ class AnalyticsService {
   }
 
   private setupBeforeUnload() {
-    window.addEventListener('beforeunload', () => {
+    this.beforeUnloadHandler = () => {
       this.updateSessionDuration();
-    });
+    };
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+  }
+
+  private setupPeriodicCleanup() {
+    // Clean up old data every 5 minutes
+    this.cleanupInterval = window.setInterval(() => {
+      this.cleanupOldData();
+    }, 5 * 60 * 1000);
+  }
+
+  private cleanupOldData() {
+    try {
+      // Remove events older than 30 days
+      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      this.events = this.events.filter(event => event.timestamp > thirtyDaysAgo);
+      
+      // Clean up localStorage if it's getting too large
+      const eventsData = localStorage.getItem('cqlforge_analytics_events');
+      if (eventsData && eventsData.length > 500000) { // 500KB limit
+        const events = JSON.parse(eventsData);
+        const recentEvents = events.slice(-500); // Keep only last 500 events
+        localStorage.setItem('cqlforge_analytics_events', JSON.stringify(recentEvents));
+        this.events = recentEvents;
+      }
+    } catch (error) {
+      console.warn('Failed to cleanup old analytics data:', error);
+    }
+  }
+
+  // Cleanup method to prevent memory leaks
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    if (this.beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler = null;
+    }
+    
+    this.events = [];
   }
 
   private updateSessionDuration() {
@@ -256,4 +301,17 @@ export const trackAIUsage = (provider: string, feature: string, tokensUsed?: num
 
 export const trackPerformance = (operation: string, duration: number, dataSize?: number) => {
   analytics.track('performance', { operation, duration, dataSize });
+};
+
+export interface LLMCallMetrics {
+  provider: string;
+  model: string;
+  success: boolean;
+  responseTime: number;
+  tokenCount?: number;
+  error?: string;
+}
+
+export const trackLLMCall = (metrics: LLMCallMetrics) => {
+  analytics.track('llm_call', metrics, 'LLMService');
 };

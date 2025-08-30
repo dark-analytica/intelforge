@@ -1,22 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Navigation } from '@/components/Navigation';
 import { IOCExtractor } from '@/components/IOCExtractor';
-import { CQLGenerator } from '@/components/CQLGenerator';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import ApiKeysDialog from '@/components/ApiKeysDialog';
+import { QueryGenerator } from '@/components/CQLGenerator';
+import { Navigation } from '@/components/Navigation';
+import { MobileNavigation } from '@/components/MobileNavigation';
+import { ResponsiveLayout, ResponsiveGrid, ResponsiveStack } from '@/components/ResponsiveLayout';
+import { TouchOptimizedButton } from '@/components/TouchOptimizedButton';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { ApiKeysDialog } from '@/components/ApiKeysDialog';
 import { HelpDialog } from '@/components/HelpDialog';
 import { ExportDialog } from '@/components/ExportDialog';
 import { HuntSuggestions } from '@/components/HuntSuggestions';
 import { HuntPackManager } from '@/components/HuntPackManager';
-import { CQLBuilder } from '@/components/CQLBuilder';
+import { QueryBuilder } from '@/components/CQLBuilder';
+import { RateLimitStatus } from '@/components/RateLimitStatus';
+import { QueryAnalyzer } from '@/components/CQLAnalyzer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useIsMobile, useIsTablet } from '@/hooks/useMediaQuery';
 import { analytics, trackUserAction } from '@/lib/analytics';
 import { Clock, Shield, Zap, Settings, HelpCircle } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const Index = () => {
   const [activeSection, setActiveSection] = useState('ingest');
@@ -29,18 +35,21 @@ const Index = () => {
     md5: [],
     emails: []
   });
+  const [generatedQueries, setGeneratedQueries] = useState<string[]>([]);
+  const [extractedTTPs, setExtractedTTPs] = useState<any[]>([]);
+  const [extractedDetections, setExtractedDetections] = useState<any[]>([]);
+  const [extractedEntities, setExtractedEntities] = useState<any>({});
   const [apiDialogOpen, setApiDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [generatedQueries, setGeneratedQueries] = useState<any[]>([]);
-  
+
+  const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+
   const { handleError } = useErrorHandler();
-  
+
   // Phase 4: Enhanced state for TTP tracking
-  const [extractedTTPs, setExtractedTTPs] = useState<any[]>([]);
-  const [extractedDetections, setExtractedDetections] = useState<any[]>([]);
-  const [extractedEntities, setExtractedEntities] = useState<any>(null);
 
   const counts = getIOCCounts(iocs);
 
@@ -77,13 +86,15 @@ const Index = () => {
           }}
         />;
       case 'queries':
-        return <CQLGenerator iocs={iocs} onQueriesGenerated={setGeneratedQueries} />;
+        return <QueryGenerator iocs={iocs} onQueriesGenerated={setGeneratedQueries} />;
+      case 'analyzer':
+        return <QueryAnalyzer queries={generatedQueries} />;
       case 'hunts':
         return <HuntSuggestions iocs={iocs} ttps={extractedTTPs || []} onApplyHunt={handleApplyHunt} />;
       case 'hunt-packs':
         return <HuntPackManager onApplyQuery={handleApplyQuery} />;
       case 'cql-builder':
-        return <CQLBuilder />;
+        return <QueryBuilder />;
       case 'exports':
         return (
           <Card>
@@ -156,7 +167,10 @@ const Index = () => {
             <CardContent className="space-y-6">
               <div>
                 <h3 className="text-sm font-medium mb-3">Theme</h3>
-                <ThemeToggle />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Switch between Analyst and Pip-Boy modes</span>
+                  <ThemeToggle />
+                </div>
               </div>
               
               <div>
@@ -189,9 +203,9 @@ const Index = () => {
               <div>
                 <h3 className="text-sm font-medium mb-3">Data Profiles</h3>
                 <div className="space-y-2">
-                  <Badge variant="secondary">Default CrowdStrike</Badge>
+                  <Badge variant="secondary">Multi-Vendor Support</Badge>
                   <p className="text-sm text-muted-foreground">
-                    Standard NG-SIEM field mappings
+                    Universal SIEM field mappings and query generation
                   </p>
                 </div>
               </div>
@@ -204,76 +218,104 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar Navigation */}
-      <Navigation 
+    <ResponsiveLayout
+      className="min-h-screen bg-background"
+      mobileClassName="flex flex-col"
+      desktopClassName="flex"
+    >
+      {/* Mobile Navigation */}
+      <MobileNavigation
         activeSection={activeSection}
         onSectionChange={setActiveSection}
-        iocCount={counts.total}
-        queryCount={generatedQueries.length}
+        iocCounts={counts}
       />
-
+      
+      {/* Desktop Sidebar Navigation */}
+      {!isMobile && (
+        <Navigation 
+          activeSection={activeSection} 
+          onSectionChange={setActiveSection}
+          iocCount={counts.total}
+          queryCount={generatedQueries.length}
+        />
+      )}
+      
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Bar */}
-        <header className="bg-card border-b border-border p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <h2 className="font-terminal text-xl text-glow">
-                  {activeSection === 'ingest' && 'IOC Extraction'}
-                  {activeSection === 'queries' && 'CQL Generation'}
-                  {activeSection === 'hunts' && 'Hunt Ideas'}
-                  {activeSection === 'hunt-packs' && 'Hunt Packs'}
-                  {activeSection === 'cql-builder' && 'CQL Builder'}
-                  {activeSection === 'exports' && 'Export Data'}
-                  {activeSection === 'settings' && 'Settings'}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  CrowdStrike NG-SIEM Query Language Generator
-                </p>
+      <div className={`flex-1 flex flex-col ${isMobile ? 'pt-16' : ''}`}>
+        {/* Desktop Header */}
+        {!isMobile && (
+          <header className="border-b border-border bg-background/95 backdrop-blur">
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-6 w-6 text-primary" />
+                  <h1 className="text-xl font-bold font-terminal text-glow">IntelForge</h1>
+                </div>
+                
+                {counts.total > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="font-mono">
+                      {counts.total} IOCs
+                    </Badge>
+                    <div className="text-xs text-muted-foreground hidden md:flex items-center gap-3">
+                      {counts.ipv4 > 0 && <span>IPv4: {counts.ipv4}</span>}
+                      {counts.ipv6 > 0 && <span>IPv6: {counts.ipv6}</span>}
+                      {counts.domains > 0 && <span>Domains: {counts.domains}</span>}
+                      {counts.urls > 0 && <span>URLs: {counts.urls}</span>}
+                      {counts.sha256 > 0 && <span>SHA256: {counts.sha256}</span>}
+                      {counts.md5 > 0 && <span>MD5: {counts.md5}</span>}
+                      {counts.emails > 0 && <span>Emails: {counts.emails}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
+              
+              <ResponsiveStack direction={{ mobile: 'col', desktop: 'row' }} spacing={{ mobile: 2, desktop: 2 }}>
+                <RateLimitStatus />
+                <TouchOptimizedButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSettingsDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </TouchOptimizedButton>
+                <TouchOptimizedButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setHelpDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  Help
+                </TouchOptimizedButton>
+              </ResponsiveStack>
             </div>
-            
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                <span>Last 24h</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setHelpDialogOpen(true)}
-                className="gap-2"
-              >
-                <HelpCircle className="h-4 w-4" />
-                Help
-              </Button>
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* Content Area */}
-        <main className="flex-1 p-6 overflow-auto">
-          <div className="max-w-6xl mx-auto">
-            {renderContent()}
+        <main className={`flex-1 overflow-auto ${isMobile ? 'p-4' : 'p-6'}`}>
+          <div className={`mx-auto w-full ${isMobile ? 'max-w-full' : 'max-w-7xl'}`}>
+            <div className="min-w-0">
+              {renderContent()}
+            </div>
           </div>
         </main>
+        
+        {/* Dialogs */}
         <ApiKeysDialog open={apiDialogOpen} onOpenChange={setApiDialogOpen} />
         <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
         <HelpDialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen} />
         <ExportDialog 
           open={exportDialogOpen} 
-          onOpenChange={setExportDialogOpen} 
-          iocs={iocs} 
+          onOpenChange={setExportDialogOpen}
+          iocs={iocs}
           queries={generatedQueries}
-          ttps={extractedTTPs}
-          detections={extractedDetections}
-          entities={extractedEntities}
         />
       </div>
-    </div>
+    </ResponsiveLayout>
   );
 };
 

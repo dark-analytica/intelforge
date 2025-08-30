@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import mobile-optimized styles */
+@import './styles/mobile.css';
+
 /* CQLIntel Design System - Pip-Boy & Analyst Themes */
 
 @layer base {
@@ -97,6 +100,54 @@
     /* Enhanced glow effects for Pip-Boy */
     --glow: 0 0 15px hsl(var(--primary) / 0.4);
     --glow-strong: 0 0 25px hsl(var(--primary) / 0.6);
+  }
+
+  .theme-analyst {
+    /* Analyst Theme - Sleek Black with Cyan Accents */
+    --background: 0 0% 3%;
+    --foreground: 180 100% 90%;
+    
+    --card: 0 0% 5%;
+    --card-foreground: 180 100% 90%;
+    
+    --popover: 0 0% 5%;
+    --popover-foreground: 180 100% 90%;
+    
+    --primary: 180 100% 50%;
+    --primary-foreground: 0 0% 3%;
+    
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 180 100% 90%;
+    
+    --muted: 0 0% 8%;
+    --muted-foreground: 180 30% 65%;
+    
+    --accent: 180 100% 50%;
+    --accent-foreground: 0 0% 3%;
+    
+    --destructive: 0 100% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --warning: 45 100% 60%;
+    --warning-foreground: 0 0% 3%;
+    
+    --border: 0 0% 12%;
+    --input: 0 0% 6%;
+    --ring: 180 100% 50%;
+    
+    /* Sleek glow effects for Analyst */
+    --glow: 0 0 12px hsl(var(--primary) / 0.3);
+    --glow-strong: 0 0 20px hsl(var(--primary) / 0.5);
+    
+    /* Sidebar - match analyst theme */
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 180 100% 90%;
+    --sidebar-primary: 180 100% 50%;
+    --sidebar-primary-foreground: 0 0% 3%;
+    --sidebar-accent: 0 0% 6%;
+    --sidebar-accent-foreground: 180 100% 90%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-ring: 180 100% 50%;
   }
 }
 

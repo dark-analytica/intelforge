@@ -14,12 +14,32 @@ export interface ExportData {
   };
 }
 
-export const exportToCQL = (queries: string[]): string => {
-  const header = `# CQL Query Bundle\n\nGenerated on: ${new Date().toISOString()}\n\n---\n\n`;
-  const content = queries.map((query, index) => 
-    `## Query ${index + 1}\n\n\`\`\`cql\n${query}\n\`\`\``
-  ).join('\n\n---\n\n');
+export const exportToQueries = (queries: any[]): string => {
+  const header = `# Multi-Vendor Query Bundle\n\nGenerated on: ${new Date().toISOString()}\n\n---\n\n`;
+  
+  const content = queries.map((queryObj, index) => {
+    const query = typeof queryObj === 'string' ? queryObj : queryObj.query || queryObj.cql || queryObj;
+    const vendor = queryObj.vendor || 'Unknown';
+    const module = queryObj.module || 'Unknown';
+    
+    // Determine query language based on vendor
+    let language = 'cql';
+    if (vendor === 'splunk') language = 'spl';
+    else if (vendor === 'sentinel') language = 'kql';
+    else if (vendor === 'elastic') language = 'esql';
+    else if (vendor === 'qradar') language = 'aql';
+    else if (vendor === 'chronicle') language = 'udm';
+    else if (vendor === 'crowdstrike' || vendor === 'logscale') language = 'cql';
+    
+    return `## Query ${index + 1} - ${vendor} (${module})\n\n\`\`\`${language}\n${query}\n\`\`\``;
+  }).join('\n\n---\n\n');
+  
   return header + content;
+};
+
+// Legacy function for backward compatibility
+export const exportToCQL = (queries: string[]): string => {
+  return exportToQueries(queries);
 };
 
 export const exportToMitreNavigator = (ttps: any[], metadata?: { title?: string; description?: string; threat_actor?: string }): string => {

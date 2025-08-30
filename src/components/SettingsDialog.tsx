@@ -37,7 +37,7 @@ const defaultSecuritySettings: SecuritySettings = {
 
 const defaultAppSettings: AppSettings = {
   maxIOCsPerSession: 10000,
-  defaultVendor: 'crowdstrike',
+  defaultVendor: 'splunk',
   enableNotifications: true,
   enableAutoDetection: true
 };

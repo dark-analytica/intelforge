@@ -7,7 +7,7 @@ export const getTheme = (): Theme => {
 
 export const setTheme = (theme: Theme) => {
   localStorage.setItem('cqlintel-theme', theme);
-  document.documentElement.className = theme === 'pipboy' ? 'theme-pipboy' : '';
+  document.documentElement.className = theme === 'pipboy' ? 'theme-pipboy' : 'theme-analyst';
 };
 
 export const initializeTheme = () => {

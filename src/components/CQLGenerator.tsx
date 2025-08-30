@@ -12,14 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 import { VendorPicker } from './VendorPicker';
 import Editor from '@monaco-editor/react';
 
-interface CQLGeneratorProps {
+interface QueryGeneratorProps {
   iocs: IOCSet;
   onQueriesGenerated?: (queries: string[]) => void;
 }
 
 interface GeneratedQuery {
   template: string;
-  cql: string;
+  query: string;
   validation: any;
   vendor: string;
   module: string;
@@ -27,10 +27,10 @@ interface GeneratedQuery {
   timestamp: Date;
 }
 
-export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) => {
+export const QueryGenerator = ({ iocs, onQueriesGenerated }: QueryGeneratorProps) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [selectedVendor, setSelectedVendor] = useState('crowdstrike');
-  const [selectedModule, setSelectedModule] = useState('falcon-data-replicator');
+  const [selectedVendor, setSelectedVendor] = useState('splunk');
+  const [selectedModule, setSelectedModule] = useState('splunk-enterprise');
   const [generatedQueries, setGeneratedQueries] = useState<GeneratedQuery[]>([]);
   const [filterRepo, setFilterRepo] = useState<string>('all');
   const { toast } = useToast();
@@ -70,14 +70,16 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
         selectedModule
       );
       
-      console.log('Generated CQL:', cql);
+      console.log('Generated Query:', cql);
+      console.log('Vendor:', selectedVendor, 'Module:', selectedModule);
+      console.log('Profile used:', profile.name);
       
       const validation = validateCQLSyntax(cql);
       console.log('Validation result:', validation);
 
       const newQuery: GeneratedQuery = {
         template: template.name,
-        cql,
+        query: cql,
         validation,
         vendor: selectedVendor,
         module: selectedModule,
@@ -86,7 +88,7 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
       };
 
       setGeneratedQueries(prev => [newQuery, ...prev.slice(0, 9)]); // Keep last 10 queries
-      onQueriesGenerated?.([cql, ...generatedQueries.map(q => q.cql)]);
+      onQueriesGenerated?.(generatedQueries.map(q => q.query));
       
       toast({
         title: "Query Generated",
@@ -102,11 +104,11 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
     }
   };
 
-  const copyToClipboard = (cql: string) => {
+  const copyToClipboard = (cql: string, message: string) => {
     navigator.clipboard.writeText(cql);
     toast({
       title: "Copied to clipboard",
-      description: "CQL query copied successfully"
+      description: message
     });
   };
 
@@ -160,28 +162,27 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
   const selectedTemplate = cqlTemplates.find(t => t.id === selectedTemplateId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0">
       <Card>
         <CardHeader>
           <CardTitle className="font-terminal text-glow flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
-            Vendor-Aware CQL Generator
+            Vendor-Aware Query Generator
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 overflow-hidden">
           {/* Vendor Configuration */}
           <VendorPicker
             selectedVendor={selectedVendor}
             selectedModule={selectedModule}
             onVendorChange={setSelectedVendor}
             onModuleChange={setSelectedModule}
-            generatedQuery={generatedQueries[0]?.cql}
           />
 
           {/* Template Selection */}
           <div className="space-y-4">
-            <div className="flex gap-4">
-              <div className="flex-1">
+            <div className="flex flex-col lg:flex-row gap-4">
+              <div className="flex-1 min-w-0">
                 <label className="text-sm font-medium mb-2 block">Template Category</label>
                 <Select value={filterRepo} onValueChange={setFilterRepo}>
                   <SelectTrigger>
@@ -198,11 +199,11 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
                 </Select>
               </div>
               
-              <div className="flex-2">
-                <label className="text-sm font-medium mb-2 block">CQL Template</label>
+              <div className="flex-1 min-w-0">
+                <label className="text-sm font-medium mb-2 block">Query Template</label>
                 <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a CQL template..." />
+                    <SelectValue placeholder="Select a query template..." />
                   </SelectTrigger>
                   <SelectContent>
                     {filteredTemplates.map(template => (
@@ -315,7 +316,7 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
                       <Editor
                         height="250px"
                         defaultLanguage="sql"
-                        value={query.cql}
+                        value={query.query}
                         theme="vs-dark"
                         options={{
                           readOnly: true,
@@ -348,7 +349,7 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => copyToClipboard(query.cql)}
+                        onClick={() => copyToClipboard(query.query, 'Query copied to clipboard!')}
                         className="gap-2"
                       >
                         <Copy className="h-4 w-4" />
@@ -357,7 +358,7 @@ export const CQLGenerator = ({ iocs, onQueriesGenerated }: CQLGeneratorProps) =>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => downloadQuery(query.cql, query.template)}
+                        onClick={() => downloadQuery(query.query, query.template)}
                         className="gap-2"
                       >
                         <Download className="h-4 w-4" />

@@ -350,6 +350,19 @@ AND @timestamp >= now()-30d
 )
 | sort -unique_hosts, -executions`;
 
+    case 'ip-correlation-hunt':
+      return `// Multi-IOC Correlation Hunt
+{PROXY_REPO} OR {DNS_REPO} OR {EDR_REPO}
+| where ({DST_IP_FIELD} IN [${iocs.ips?.map(ip => `"${ip}"`).join(', ') || ''}] OR {SRC_IP_FIELD} IN [${iocs.ips?.map(ip => `"${ip}"`).join(', ') || ''}])
+| eval ioc_type = case(
+    {DST_IP_FIELD} IN [${iocs.ips?.map(ip => `"${ip}"`).join(', ') || ''}], "dst_ip",
+    {SRC_IP_FIELD} IN [${iocs.ips?.map(ip => `"${ip}"`).join(', ') || ''}], "src_ip",
+    "unknown"
+)
+| bucket @timestamp span=5m
+| stats count() as events, values({HOST_FIELD}) as hosts by @timestamp, ioc_type
+| sort @timestamp desc`;
+
     case 'multi-ioc-correlation-hunt':
       return `// Multi-IOC Correlation Analysis
 (sourcetype="*" OR event_simpleName=*)
@@ -401,6 +414,62 @@ AND (
 | stats count() as correlated_events, min(time_diff) as min_gap by ComputerName, ioc_type
 | where correlated_events > 1
 | sort -correlated_events`;
+
+    case 'domain-typo-hunt':
+      return `// Typosquatting Domain Hunt
+sourcetype="dns:*" OR event_simpleName=DnsRequest*
+AND domain IN [${iocs.domains?.map(d => `"${d}"`).join(', ') || ''}]
+AND @timestamp >= now()-24h
+| eval domain_lower = lower(domain)
+| eval typo_indicators = case(
+    match(domain_lower, "g[o0][o0]gle"), 3,
+    match(domain_lower, "micr[o0]s[o0]ft"), 3,
+    match(domain_lower, "amaz[o0]n"), 2,
+    match(domain_lower, "face[bp][o0][o0]k"), 2,
+    len(domain) > 20 AND match(domain, "[0-9]"), 1,
+    0
+)
+| where typo_indicators > 0
+| stats count() as queries, values(src_ip) as sources by domain, typo_indicators
+| sort -typo_indicators, -queries`;
+
+    case 'email-campaign-hunt':
+      return `// Email Campaign Analysis Hunt
+sourcetype="email:*" OR event_simpleName=EmailEvent*
+AND sender IN [${iocs.emails?.map(e => `"${e}"`).join(', ') || ''}]
+AND @timestamp >= now()-7d
+| eval campaign_indicators = case(
+    match(subject, "(?i)(urgent|action|verify|suspend)"), 3,
+    match(body, "(?i)(click|download|attachment)"), 2,
+    len(subject) > 50, 1,
+    0
+)
+| stats count() as emails, 
+        dc(recipient) as unique_recipients,
+        values(subject) as subjects,
+        values(attachment_name) as attachments
+        by sender, campaign_indicators
+| where campaign_indicators > 0
+| sort -campaign_indicators, -emails`;
+
+    case 'hash-persistence-hunt':
+      return `// Malware Persistence Correlation Hunt
+sourcetype="edr:*" OR event_simpleName=ProcessRollup*
+AND (sha256 IN [${allHashes.filter(h => h.length === 64).map(h => `"${h}"`).join(', ')}] OR md5 IN [${allHashes.filter(h => h.length === 32).map(h => `"${h}"`).join(', ')}])
+AND @timestamp >= now()-7d
+| eval persistence_indicators = case(
+    match(CommandLine, "(?i)(schtasks|at\\.exe|crontab)"), 3,
+    match(CommandLine, "(?i)(reg.*run|startup|autostart)"), 3,
+    match(ProcessName, "(?i)(services\\.exe|winlogon\\.exe)"), 2,
+    1
+)
+| stats count() as executions,
+        dc(ComputerName) as unique_hosts,
+        values(CommandLine) as commands,
+        values(persistence_indicators) as persistence_methods
+        by coalesce(sha256, md5)
+| where persistence_indicators > 1
+| sort -persistence_indicators, -unique_hosts`;
       
     default:
       // Handle TTP-based hunts and other templates
@@ -439,26 +508,53 @@ AND @timestamp >= now()-24h
 | sort(@timestamp, desc)`;
       }
       
-      if (huntId === 'malware-execution-hunt') {
+      // Generate dynamic templates for missing hunt IDs
+      if (huntId.includes('powershell')) {
         return `#type=edr
-| in(sha256, [${allHashes.filter(h => h.length === 64).map(h => `"${h}"`).join(', ')}])
-| table(host, user, process_path, sha256, @timestamp)
-| sort(@timestamp, desc)`;
+| where match(CommandLine, "(?i)powershell") OR match(ProcessName, "(?i)powershell")
+| where match(CommandLine, "(?i)(bypass|hidden|encoded|downloadstring|invoke|exec|eval|iex|webclient)")
+| stats count() by ComputerName, UserName, CommandLine
+| sort count desc`;
       }
       
-      if (huntId === 'credential-abuse-hunt') {
-        return `#type=idp
-| in(email, [${iocs.emails?.map(e => `"${e}"`).join(', ') || ''}])
-| where action = "login"
-| stats count() by email, src_ip
-| sort(_count, desc)`;
+      if (huntId.includes('process-injection')) {
+        return `#type=edr
+| where match(CommandLine, "(?i)(inject|hollow|migrate|createremotethread|setwindowshookex)") OR match(ProcessName, "(?i)(rundll32|regsvr32|mshta)")
+| stats count() by ComputerName, ProcessName, CommandLine
+| sort count desc`;
       }
       
-      return `// Hunt template not found for: ${huntId}
-// Please check the hunt ID and try again
-#type=*
-| where @timestamp >= now()-24h
-| stats count() by sourcetype
-| sort -count`;
+      if (huntId.includes('file-discovery')) {
+        return `#type=edr
+| where match(CommandLine, "(?i)(dir|ls|find|locate|tree)")
+| stats count() by ComputerName, UserName, CommandLine
+| sort count desc`;
+      }
+      
+      if (huntId.includes('network-discovery')) {
+        return `#type=network
+| where match(url, "(?i)(scan|probe|enum)") OR match(user_agent, "(?i)(nmap|masscan|curl|wget)")
+| stats count() by dst_ip, src_ip, user_agent
+| sort count desc`;
+      }
+      
+      if (huntId.includes('multi-stage')) {
+        return `#type=edr
+| where match(CommandLine, "(?i)(powershell.*download|certutil.*decode|bitsadmin.*transfer|wmic.*process|psexec|winrm)")
+| stats count() by ComputerName, CommandLine
+| sort count desc`;
+      }
+      
+      if (huntId.includes('generic')) {
+        return `#type=edr
+| where match(CommandLine, "(?i)(malware|trojan|backdoor|c2|command.*control|suspicious|anomal)")
+| stats count() by ComputerName, ProcessName, CommandLine
+| sort count desc`;
+      }
+      
+      return `#type=edr
+| where match(CommandLine, "(?i)(${huntId.replace(/-/g, '|')})")
+| stats count() by ComputerName, ProcessName, CommandLine
+| sort count desc`;
   }
 };

@@ -122,7 +122,7 @@ export const useErrorHandler = () => {
     
     // Log error for debugging
     console.error(`[${context?.component || 'Unknown'}] ${context?.action || 'Error'}:`, {
-      error,
+      error: error instanceof Error ? error.message : String(error),
       context,
       errorInfo
     });

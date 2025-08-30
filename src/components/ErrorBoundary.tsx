@@ -71,7 +71,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               </div>
               <CardTitle>Something went wrong</CardTitle>
               <CardDescription>
-                An unexpected error occurred while running CQLForge. This has been logged for investigation.
+                An unexpected error occurred while running IntelForge. This has been logged for investigation.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

@@ -23,9 +23,10 @@ interface NavigationProps {
 const navigationItems = [
   { id: 'ingest', label: 'IOCs', icon: Search, badge: 'iocCount' },
   { id: 'queries', label: 'Queries', icon: Code, badge: 'queryCount' },
+  { id: 'analyzer', label: 'Performance', icon: Activity },
   { id: 'hunts', label: 'Hunts', icon: Target },
   { id: 'hunt-packs', label: 'Hunt Packs', icon: Package },
-  { id: 'cql-builder', label: 'CQL Builder', icon: Activity },
+  { id: 'cql-builder', label: 'Query Builder', icon: Activity },
   { id: 'exports', label: 'Exports', icon: Download },
   { id: 'settings', label: 'Settings', icon: Settings }
 ];
@@ -53,8 +54,8 @@ export const Navigation = ({
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-terminal text-lg text-glow">CQLForge</h1>
-            <p className="text-xs text-muted-foreground">CTI → CQL</p>
+            <h1 className="font-terminal text-lg text-glow">IntelForge</h1>
+            <p className="text-xs text-muted-foreground">CTI → Queries</p>
           </div>
         </div>
       </div>
@@ -104,7 +105,7 @@ export const Navigation = ({
             <span>MIT</span>
           </div>
           <div className="text-center">
-            CrowdStrike NG-SIEM
+            Multi-Vendor SIEM
           </div>
         </div>
       </div>

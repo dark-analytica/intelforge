@@ -1,15 +1,38 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import React, { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
-import { extractIOCs, getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
-import { Scan, Upload, Link } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { BatchProgressIndicator } from '@/components/BatchProgressIndicator';
+import { ResponsiveLayout, ResponsiveGrid, ResponsiveStack } from './ResponsiveLayout';
+import { TouchOptimizedButton } from './TouchOptimizedButton';
+import { DragDropZone } from '@/components/DragDropZone';
+import { WorkInProgressIndicator } from './WorkInProgressIndicator';
+import { useWorkInProgress } from '@/hooks/useWorkInProgress';
 import { IOCList } from './IOCList';
 import { TTpExtractor } from './TTpExtractor';
+import { extractIOCs, extractIOCsWithBatching, getIOCCounts, type IOCSet } from '@/lib/ioc-extractor';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { useIsMobile, useIsTouchDevice } from '@/hooks/useMediaQuery';
+import { analytics, trackUserAction } from '@/lib/analytics';
+import { 
+  Upload, 
+  FileText, 
+  Globe, 
+  Search, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2,
+  X,
+  Download
+} from 'lucide-react';
+import { URLScanner } from '@/lib/url-scanner';
 
 interface IOCExtractorProps {
   onIOCsExtracted: (iocs: IOCSet) => void;
@@ -17,207 +40,340 @@ interface IOCExtractorProps {
   onTTPsExtracted?: (ttps: any[], detections: any[], entities: any) => void;
 }
 
-export const IOCExtractor = ({ onIOCsExtracted, iocs, onTTPsExtracted }: IOCExtractorProps) => {
-  const [inputText, setInputText] = useState('');
-  const [includePrivate, setIncludePrivate] = useState(false);
-  const [filterLegitimate, setFilterLegitimate] = useState(true);
-  const [isExtracting, setIsExtracting] = useState(false);
+export const IOCExtractor: React.FC<IOCExtractorProps> = ({ onIOCsExtracted, iocs, onTTPsExtracted }) => {
+  const [text, setText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [extractedIOCs, setExtractedIOCs] = useState<IOCSet | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
-  const [lastFetchedUrl, setLastFetchedUrl] = useState<string | null>(null);
-  const { toast } = useToast();
+  const [isUrlLoading, setIsUrlLoading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<any>(null);
+  const [showBatchProgress, setShowBatchProgress] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { handleError } = useErrorHandler();
+  const isMobile = useIsMobile();
+  const isTouchDevice = useIsTouchDevice();
 
-  const counts = getIOCCounts(iocs);
-
-  const handleExtractIOCs = () => {
-    if (!inputText.trim()) return;
-    
-    setIsExtracting(true);
-    setTimeout(() => {
-      const extractedIOCs = extractIOCs(inputText, includePrivate, filterLegitimate, lastFetchedUrl || undefined);
-      onIOCsExtracted(extractedIOCs);
-      setIsExtracting(false);
-    }, 500); // Simulate processing time
-  };
-
-  const handleFetchURL = async () => {
-    const raw = urlInput.trim();
-    if (!raw) return;
-    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-
-    setIsExtracting(true);
-    try {
-      const proxy = localStorage.getItem('cqlforge_proxy_url');
-      const fetchUrl = proxy ? `${proxy}?url=${encodeURIComponent(url)}` : url;
-      const res = await fetch(fetchUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      setInputText(text);
-      setLastFetchedUrl(url);
-      const extracted = extractIOCs(text, includePrivate, filterLegitimate, url);
-      onIOCsExtracted(extracted);
-      toast({ title: 'Fetched URL', description: 'Content loaded and IOCs extracted automatically.' });
-    } catch (e: any) {
-      // Fallback to a public, read-only CORS-friendly fetcher
-      try {
-        const alt = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, '')}`;
-        const res2 = await fetch(alt);
-        if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
-        const text2 = await res2.text();
-        setInputText(text2);
-        setLastFetchedUrl(url);
-        const extracted = extractIOCs(text2, includePrivate, filterLegitimate, url);
-        onIOCsExtracted(extracted);
-        toast({ title: 'Fetched via fallback', description: 'Content loaded and IOCs extracted automatically.' });
-      } catch {
-        toast({ title: 'Fetch failed', description: 'CORS or network blocked. Configure a proxy in Settings.', variant: 'destructive' });
-      }
-    } finally {
-      setIsExtracting(false);
+  const handleTextExtraction = useCallback(async () => {
+    if (!text.trim()) {
+      handleError({
+        title: "No text provided",
+        description: "Please enter some text to extract IOCs from.",
+        variant: "destructive"
+      });
+      return;
     }
-  };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    setIsLoading(true);
+    setBatchProgress(null);
+    setShowBatchProgress(false);
 
-    setIsExtracting(true);
     try {
-      let text = '';
-      
-      if (file.type === 'application/pdf') {
-        // PDF parsing using pdfjs-dist
-        const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@latest/build/pdf.worker.min.js';
-        
-        const fileBuffer = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: fileBuffer }).promise;
-        
-        const textParts: string[] = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          const pageText = content.items
-            .filter((item): item is any => 'str' in item)
-            .map((item: any) => item.str)
-            .join(' ');
-          textParts.push(pageText);
-        }
-        text = textParts.join('\n\n');
-        toast({ title: 'PDF Processed', description: `Extracted text from ${pdf.numPages} pages` });
+      let extractedIOCs: IOCSet;
+
+      const shouldUseBatching = text.length > 100000;
+
+      if (shouldUseBatching) {
+        setShowBatchProgress(true);
+        extractedIOCs = await extractIOCsWithBatching(
+          text,
+          true,
+          true,
+          (progress) => {
+            setBatchProgress(progress);
+          }
+        );
       } else {
-        // Regular text file
-        const reader = new FileReader();
-        text = await new Promise<string>((resolve, reject) => {
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsText(file);
-        });
-        toast({ title: 'File Loaded', description: 'Text file content loaded' });
+        extractedIOCs = extractIOCs(text, true);
       }
-      
-      setInputText(text);
-    } catch (error: any) {
-      console.error('File processing error:', error);
-      toast({ 
-        title: 'File Processing Failed', 
-        description: error.message || 'Failed to process the uploaded file',
-        variant: 'destructive' 
+
+      setExtractedIOCs(extractedIOCs);
+      onIOCsExtracted(extractedIOCs);
+
+      const counts = getIOCCounts(extractedIOCs);
+      console.log(`IOCs extracted successfully: Found ${counts.total} IOCs (${counts.ipv4} IPs, ${counts.domains} domains, ${counts.urls} URLs, ${counts.sha256 + counts.md5} hashes, ${counts.emails} emails)${shouldUseBatching ? ' using batch processing' : ''}`);
+    } catch (error) {
+      console.error('IOC extraction failed:', error);
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+      handleError(new Error(errorMessage));
+    } finally {
+      setIsLoading(false);
+      setShowBatchProgress(false);
+      setBatchProgress(null);
+    }
+  }, [text, onIOCsExtracted]);
+
+  const handleURLScan = useCallback(async () => {
+    if (!urlInput.trim()) {
+      handleError(new Error("Please enter a URL to scan"));
+      return;
+    }
+
+    setIsUrlLoading(true);
+
+    try {
+      const urlScanner = new URLScanner();
+      const scanResult = await urlScanner.scanURL(urlInput);
+
+      if (scanResult.iocs) {
+        // Set the content for TTP analysis
+        setText(scanResult.content);
+        
+        setExtractedIOCs(scanResult.iocs);
+        onIOCsExtracted(scanResult.iocs);
+
+        const counts = getIOCCounts(scanResult.iocs);
+        console.log(`URL scanned successfully: Found ${counts.total} IOCs from ${urlInput}. Content available for TTP analysis.`);
+      } else {
+        throw new Error(scanResult.error || 'Failed to scan URL');
+      }
+    } catch (error) {
+      console.error('URL scan failed:', error);
+      handleError({
+        title: "URL scan failed",
+        description: error instanceof Error ? error.message : "Failed to scan URL",
+        variant: "destructive"
       });
     } finally {
-      setIsExtracting(false);
+      setIsUrlLoading(false);
     }
-  };
+  }, [urlInput, onIOCsExtracted]);
+
+  const handleFileProcessing = useCallback(async (file: File) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      let fileText = '';
+
+      // Handle text-based files only
+      const reader = new FileReader();
+      fileText = await new Promise<string>((resolve, reject) => {
+        reader.onload = (e) => {
+          const result = e.target?.result;
+          if (typeof result === 'string') {
+            resolve(result);
+          } else {
+            reject(new Error('Failed to read file as text'));
+          }
+        };
+        reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+        reader.readAsText(file, 'UTF-8');
+      });
+
+      setText(fileText);
+
+      // Extract IOCs from the text
+      const extractedIOCs = extractIOCs(fileText, true, true);
+
+      setExtractedIOCs(extractedIOCs);
+      onIOCsExtracted(extractedIOCs);
+
+      const counts = getIOCCounts(extractedIOCs);
+      
+      // Show success message without using handleError to avoid object serialization issues
+      console.log(`File processed successfully: Found ${counts.total} IOCs from ${file.name}`);
+      
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
+      setError(errorMessage);
+      handleError(new Error(errorMessage));
+    } finally {
+      setIsLoading(false);
+      setShowBatchProgress(false);
+      setBatchProgress(null);
+    }
+  }, [onIOCsExtracted, handleError]);
+
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    await handleFileProcessing(file);
+  }, [handleFileProcessing]);
 
   return (
-    <div className="space-y-6">
+    <ResponsiveLayout className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="font-terminal text-glow">CTI Ingest</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            IOC Extraction
+          </CardTitle>
           <CardDescription>
-            Paste CTI text, upload a file, or enter a URL to extract IOCs
+            Extract Indicators of Compromise from text, files, or URLs
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea
-            placeholder="Paste your cyber threat intelligence text here..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            className="min-h-[200px] font-code"
-          />
-          
-          <div className="flex items-center gap-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="includePrivate"
-                checked={includePrivate}
-                onCheckedChange={(checked) => setIncludePrivate(checked as boolean)}
+        <CardContent>
+          <Tabs defaultValue="text" className="w-full">
+            <TabsList className={`grid w-full ${isMobile ? 'grid-cols-1 h-auto' : 'grid-cols-3'}`}>
+              <TabsTrigger value="text" className={isMobile ? 'w-full mb-1' : ''}>
+                <FileText className="h-4 w-4 mr-2" />
+                Text Input
+              </TabsTrigger>
+              <TabsTrigger value="file" className={isMobile ? 'w-full mb-1' : ''}>
+                <Upload className="h-4 w-4 mr-2" />
+                File Upload
+              </TabsTrigger>
+              <TabsTrigger value="url" className={isMobile ? 'w-full' : ''}>
+                <Globe className="h-4 w-4 mr-2" />
+                URL Scan
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="text" className="space-y-4">
+              <div>
+                <Label htmlFor="ioc-text">Paste your text containing IOCs</Label>
+                <Textarea
+                  id="ioc-text"
+                  placeholder="Paste threat intelligence reports, logs, or any text containing IOCs..."
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  className={`font-mono text-sm ${isMobile ? 'min-h-[150px] text-base' : 'min-h-[200px]'}`}
+                />
+              </div>
+              <TouchOptimizedButton 
+                onClick={handleTextExtraction} 
+                disabled={!text.trim() || isLoading}
+                className="w-full"
+                touchSize={isMobile ? 'lg' : 'md'}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Extracting IOCs...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Extract IOCs
+                  </>
+                )}
+              </TouchOptimizedButton>
+            </TabsContent>
+            <TabsContent value="file" className="space-y-4">
+              <DragDropZone
+                onFileDrop={(files) => {
+                  const file = files[0];
+                  if (file) {
+                    // Call the file processing directly instead of synthetic event
+                    handleFileProcessing(file);
+                  }
+                }}
+                acceptedTypes={['.txt', '.csv', '.json', '.xml', '.html', '.md']}
+                maxFiles={1}
+                maxSize={50 * 1024 * 1024}
+                disabled={isLoading}
+                fileInputRef={fileInputRef}
+                onError={(error) => {
+                  handleError({
+                    title: "File Upload Error",
+                    description: error,
+                    variant: "destructive"
+                  });
+                }}
               />
-              <label htmlFor="includePrivate" className="text-sm">
-                Include private IP ranges
-              </label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="filterLegitimate"
-                checked={filterLegitimate}
-                onCheckedChange={(checked) => setFilterLegitimate(checked as boolean)}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.json,.xml,.html,.md"
+                onChange={handleFileUpload}
+                className="hidden"
               />
-              <label htmlFor="filterLegitimate" className="text-sm">
-                Filter website navigation (recommended)
-              </label>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Input
-              placeholder="https://example.com/cti.txt"
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              className="font-code"
-            />
-            <Button variant="outline" className="gap-2" onClick={handleFetchURL}>
-              <Link className="h-4 w-4" />
-              Fetch URL
-            </Button>
-          </div>
-
-          <div className="flex gap-2">
-            <Button 
-              onClick={handleExtractIOCs}
-              disabled={!inputText.trim() || isExtracting}
-              className="gap-2"
-            >
-              <Scan className="h-4 w-4" />
-              {isExtracting ? 'Extracting...' : 'Extract IOCs'}
-            </Button>
-            
-            <Button variant="outline" className="gap-2" asChild>
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <Upload className="h-4 w-4" />
-                Upload File
-              </label>
-            </Button>
-            <input
-              id="file-upload"
-              type="file"
-              accept=".txt,.pdf"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-          </div>
+            </TabsContent>
+            <TabsContent value="url" className="space-y-4">
+              <div>
+                <Label htmlFor="url-input">Enter a URL to scan for IOCs</Label>
+                <Input
+                  id="url-input"
+                  placeholder="https://example.com/cti.txt"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  className="font-mono text-sm"
+                />
+              </div>
+              <TouchOptimizedButton 
+                onClick={handleURLScan} 
+                disabled={!urlInput.trim() || isUrlLoading}
+                className="w-full"
+                touchSize={isMobile ? 'lg' : 'md'}
+              >
+                {isUrlLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Scanning URL...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="mr-2 h-4 w-4" />
+                    Scan URL
+                  </>
+                )}
+              </TouchOptimizedButton>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
-      
-      <IOCList iocs={iocs} onIOCsUpdated={onIOCsExtracted} />
-      
-      <TTpExtractor 
-        text={inputText} 
-        onExtractionComplete={onTTPsExtracted ? (result) => 
-          onTTPsExtracted(result.ttps, result.detections, result.entities) : undefined
-        }
-      />
-    </div>
+      {extractedIOCs && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                Extracted IOCs
+              </span>
+              <TouchOptimizedButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setExtractedIOCs(null)}
+              >
+                <X className="h-4 w-4" />
+              </TouchOptimizedButton>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveGrid 
+              cols={{ mobile: 2, tablet: 4, desktop: 4 }} 
+              gap={{ mobile: 2, tablet: 4, desktop: 4 }}
+              className="mb-6"
+            >
+              {Object.entries(extractedIOCs).map(([type, iocs]) => (
+                <div key={type} className="text-center">
+                  <div className={`font-bold text-primary ${isMobile ? 'text-xl' : 'text-2xl'}`}>{iocs.length}</div>
+                  <div className={`text-muted-foreground capitalize ${isMobile ? 'text-xs' : 'text-sm'}`}>{type}</div>
+                </div>
+              ))}
+            </ResponsiveGrid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Batch Progress Indicator */}
+      {showBatchProgress && batchProgress && (
+        <BatchProgressIndicator
+          {...batchProgress}
+          isVisible={showBatchProgress}
+        />
+      )}
+
+      {/* Display extracted IOCs */}
+      {extractedIOCs && (
+        <IOCList 
+          iocs={extractedIOCs} 
+          onIOCsUpdated={(updatedIOCs) => {
+            setExtractedIOCs(updatedIOCs);
+            onIOCsExtracted(updatedIOCs);
+          }} 
+        />
+      )}
+
+      {/* TTP Extractor for AI-powered analysis */}
+      {(text || extractedIOCs) && (
+        <TTpExtractor 
+          text={text}
+          onTTPsExtracted={onTTPsExtracted}
+        />
+      )}
+    </ResponsiveLayout>
   );
 };
