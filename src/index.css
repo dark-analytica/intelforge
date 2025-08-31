@@ -1,9 +1,9 @@
+/* Import mobile-optimized styles */
+@import './styles/mobile.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import mobile-optimized styles */
-@import './styles/mobile.css';
 
 /* CQLIntel Design System - Pip-Boy & Analyst Themes */
 
